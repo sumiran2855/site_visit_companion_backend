@@ -38,5 +38,18 @@ export class AuthController {
     const updated = await this.authService.updateProfile(request.user.id, validated);
     reply.send(ResponseUtil.success(updated, 'Profile updated successfully'));
   };
+
+  public checkStatus = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const { email, company } = request.query as { email?: string; company?: string };
+    const status = await this.authService.checkStatus(email, company);
+    reply.send(ResponseUtil.success(status));
+  };
+
+  public logout = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const authHeader = request.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : undefined;
+    await this.authService.logout(token);
+    reply.send(ResponseUtil.success(null, 'Logged out successfully'));
+  };
 }
 

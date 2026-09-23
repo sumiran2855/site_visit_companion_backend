@@ -14,6 +14,8 @@ export class AuthRoutes {
   public register = async (fastify: FastifyInstance): Promise<void> => {
     fastify.post('/signup', this.controller.signupRequest);
     fastify.post('/login', this.controller.login);
+    fastify.post('/logout', this.controller.logout);
+    fastify.get('/status', this.controller.checkStatus);
 
     fastify.register(async (authenticatedScope) => {
       authenticatedScope.addHook('preHandler', this.authMiddleware.handle);

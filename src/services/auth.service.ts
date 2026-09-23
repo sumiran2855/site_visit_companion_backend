@@ -2,7 +2,7 @@ import type { IUserRepository } from '../repositories/interfaces/user.repository
 import type { ISignupRequestRepository } from '../repositories/interfaces/signup-request.repository.interface.js';
 import type { ICompanyRepository } from '../repositories/interfaces/company.repository.interface.js';
 import type { IProfile, ISignupRequest, OptionalUpdate } from '../types/models.js';
-import type { UserRoleType } from '../types/roles.js';
+import type { UserRoleType, SignupStatusType } from '../types/roles.js';
 import { SupabaseUserRepository } from '../repositories/supabase-user.repository.js';
 import { SupabaseSignupRequestRepository } from '../repositories/supabase-signup-request.repository.js';
 import { SupabaseCompanyRepository } from '../repositories/supabase-company.repository.js';
@@ -37,20 +37,42 @@ export class AuthService {
     middleName?: string | undefined;
     requestedCompany: string;
   }): Promise<ISignupRequest> {
-    const existingUser = await this.userRepo.findByEmail(data.email);
-    if (existingUser) {
-      throw new ConflictError('User with this email already exists');
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const existingUser = await this.userRepo.findByEmail(normalizedEmail);
+    const existingRequest = await this.signupRepo.findByEmail(normalizedEmail);
+
+    const client = SupabaseClientProvider.getInstance().getAdminClient();
+
+    // If an approved account already exists, update its password so the user can sign in
+    if (existingUser && existingUser.approvalStatus === 'approved') {
+      const { data: userList } = await client.auth.admin.listUsers();
+      const authUser = userList.users.find((u) => u.email?.toLowerCase() === normalizedEmail);
+      if (authUser) {
+        await client.auth.admin.updateUserById(authUser.id, {
+          password: data.password,
+          email_confirm: true,
+        });
+      }
+      return existingRequest || {
+        id: existingUser.id,
+        email: normalizedEmail,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        middleName: data.middleName ?? null,
+        requestedCompany: data.requestedCompany,
+        status: 'approved',
+        createdAt: existingUser.createdAt,
+        updatedAt: new Date(),
+      };
     }
 
-    const existingRequest = await this.signupRepo.findByEmail(data.email);
     if (existingRequest && existingRequest.status === 'pending') {
       throw new ConflictError('A signup request for this email is already pending approval');
     }
 
-    // Register user in Supabase Auth as unconfirmed/pending
-    const client = SupabaseClientProvider.getInstance().getAdminClient();
+    // Register user in Supabase Auth as unconfirmed/pending or link existing Google OAuth user
     const { data: authUser, error: authError } = await client.auth.admin.createUser({
-      email: data.email,
+      email: normalizedEmail,
       password: data.password,
       email_confirm: true,
       user_metadata: {
@@ -60,30 +82,72 @@ export class AuthService {
       },
     });
 
-    if (authError || !authUser.user) {
-      throw new ConflictError(authError ? authError.message : 'Could not create auth account');
+    let authUserId: string;
+
+    if (authError) {
+      // Check if user already exists in Supabase Auth (e.g. from Google OAuth sign-in)
+      if (
+        authError.message.includes('already been registered') ||
+        (authError as { code?: string }).code === 'email_exists'
+      ) {
+        const { data: userList } = await client.auth.admin.listUsers();
+        const existingAuthUser = userList.users.find(
+          (u) => u.email?.toLowerCase() === normalizedEmail
+        );
+
+        if (!existingAuthUser) {
+          throw new ConflictError(authError.message);
+        }
+
+        authUserId = existingAuthUser.id;
+
+        // Update password and user metadata in Supabase
+        await client.auth.admin.updateUserById(existingAuthUser.id, {
+          password: data.password,
+          email_confirm: true,
+          user_metadata: {
+            ...existingAuthUser.user_metadata,
+            first_name: data.firstName,
+            last_name: data.lastName,
+            requested_company: data.requestedCompany,
+          },
+        });
+      } else {
+        throw new ConflictError(authError.message);
+      }
+    } else if (authUser?.user) {
+      authUserId = authUser.user.id;
+    } else {
+      throw new ConflictError('Could not create auth account');
     }
 
     // Create initial profile in pending status
     try {
-      await this.userRepo.create({
-        id: authUser.user.id,
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        middleName: data.middleName ?? null,
-        companyId: null,
-        role: 'standard',
-        approvalStatus: 'pending',
-      });
+      const existingProfile = await this.userRepo.findById(authUserId);
+      if (!existingProfile) {
+        await this.userRepo.create({
+          id: authUserId,
+          email: normalizedEmail,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          middleName: data.middleName ?? null,
+          companyId: null,
+          role: 'standard',
+          approvalStatus: 'pending',
+        });
+      }
     } catch (profileErr) {
       this.logger.warn('Could not pre-create pending profile row, will be created upon approval', {
         error: profileErr,
       });
     }
 
+    if (existingRequest) {
+      return existingRequest;
+    }
+
     return this.signupRepo.create({
-      email: data.email,
+      email: normalizedEmail,
       firstName: data.firstName,
       lastName: data.lastName,
       middleName: data.middleName ?? null,
@@ -164,12 +228,13 @@ export class AuthService {
   }
 
   public async login(email: string, password: string): Promise<{ token: string; user: IProfile }> {
+    const normalizedEmail = email.trim().toLowerCase();
     const client = SupabaseClientProvider.getInstance().getClient();
-    const { data, error } = await client.auth.signInWithPassword({ email, password });
+    const { data, error } = await client.auth.signInWithPassword({ email: normalizedEmail, password });
 
     if (error || !data.session || !data.user) {
       // Check if user submitted a signup request that is still pending or rejected
-      const pendingRequest = await this.signupRepo.findByEmail(email);
+      const pendingRequest = await this.signupRepo.findByEmail(normalizedEmail);
       if (pendingRequest) {
         if (pendingRequest.status === 'pending') {
           throw new UnauthorizedError(
@@ -182,7 +247,7 @@ export class AuthService {
       }
 
       // Check if user even exists in profiles
-      const existingProfile = await this.userRepo.findByEmail(email);
+      const existingProfile = await this.userRepo.findByEmail(normalizedEmail);
       if (!existingProfile) {
         throw new UnauthorizedError('No account found with this email. Please sign up to request access.');
       }
@@ -237,6 +302,92 @@ export class AuthService {
     await this.userRepo.delete(userId);
     await client.auth.admin.deleteUser(userId);
     this.logger.info(`User account purged`, { userId });
+    return true;
+  }
+
+  public async checkStatus(email?: string, company?: string): Promise<{
+    email: string;
+    approvalStatus: SignupStatusType | 'not_found';
+    requestedCompany?: string | null;
+  }> {
+    const client = SupabaseClientProvider.getInstance().getAdminClient();
+
+    // 1. Check directly by email if provided
+    if (email && email.trim()) {
+      const normalizedEmail = email.trim().toLowerCase();
+      const profile = await this.userRepo.findByEmail(normalizedEmail);
+      const signupReq = await this.signupRepo.findByEmail(normalizedEmail);
+
+      if (profile) {
+        return {
+          email: normalizedEmail,
+          approvalStatus: profile.approvalStatus,
+          requestedCompany: signupReq?.requestedCompany || null,
+        };
+      }
+
+      if (signupReq) {
+        return {
+          email: normalizedEmail,
+          approvalStatus: signupReq.status,
+          requestedCompany: signupReq.requestedCompany,
+        };
+      }
+    }
+
+    // 2. If email is not provided, query Supabase directly by company name
+    if (company && company.trim()) {
+      const { data: matchedReq } = await client
+        .from('signup_requests')
+        .select('*')
+        .ilike('requested_company', company.trim())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (matchedReq) {
+        const profile = await this.userRepo.findByEmail(matchedReq.email);
+        return {
+          email: String(matchedReq.email),
+          approvalStatus: profile ? profile.approvalStatus : (matchedReq.status as SignupStatusType),
+          requestedCompany: String(matchedReq.requested_company),
+        };
+      }
+    }
+
+    // 3. Fallback to latest signup request in Supabase
+    const { data: latest } = await client
+      .from('signup_requests')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (latest) {
+      const profile = await this.userRepo.findByEmail(latest.email);
+      return {
+        email: String(latest.email),
+        approvalStatus: profile ? profile.approvalStatus : (latest.status as SignupStatusType),
+        requestedCompany: String(latest.requested_company),
+      };
+    }
+
+    return {
+      email: email || '',
+      approvalStatus: 'not_found',
+    };
+  }
+
+  public async logout(token?: string): Promise<boolean> {
+    if (token) {
+      try {
+        const client = SupabaseClientProvider.getInstance().getAdminClient();
+        await client.auth.admin.signOut(token);
+        this.logger.info('User session revoked in Supabase Auth');
+      } catch (err) {
+        this.logger.warn('Could not revoke session in Supabase Auth', { error: err });
+      }
+    }
     return true;
   }
 }
