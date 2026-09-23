@@ -2,12 +2,14 @@ import type { IVisitRepository } from '../repositories/interfaces/visit.reposito
 import type { IChecklistRepository } from '../repositories/interfaces/checklist.repository.interface.js';
 import type { IMediaRepository } from '../repositories/interfaces/media.repository.interface.js';
 import type { IShareTokenRepository } from '../repositories/interfaces/share-token.repository.interface.js';
+import type { ICompanyRepository } from '../repositories/interfaces/company.repository.interface.js';
 import type { IVisit, IProfile, OptionalUpdate } from '../types/models.js';
 import type { VisitStatusType } from '../types/roles.js';
 import { SupabaseVisitRepository } from '../repositories/supabase-visit.repository.js';
 import { SupabaseChecklistRepository } from '../repositories/supabase-checklist.repository.js';
 import { SupabaseMediaRepository } from '../repositories/supabase-media.repository.js';
 import { SupabaseShareTokenRepository } from '../repositories/supabase-share-token.repository.js';
+import { SupabaseCompanyRepository } from '../repositories/supabase-company.repository.js';
 import { NotFoundError } from '../errors/not-found.error.js';
 import { ForbiddenError } from '../errors/forbidden.error.js';
 import { Logger } from '../utils/logger.js';
@@ -17,18 +19,21 @@ export class VisitService {
   private readonly checklistRepo: IChecklistRepository;
   private readonly mediaRepo: IMediaRepository;
   private readonly shareRepo: IShareTokenRepository;
+  private readonly companyRepo: ICompanyRepository;
   private readonly logger: Logger;
 
   constructor(
     visitRepo?: IVisitRepository,
     checklistRepo?: IChecklistRepository,
     mediaRepo?: IMediaRepository,
-    shareRepo?: IShareTokenRepository
+    shareRepo?: IShareTokenRepository,
+    companyRepo?: ICompanyRepository
   ) {
     this.visitRepo = visitRepo ?? new SupabaseVisitRepository();
     this.checklistRepo = checklistRepo ?? new SupabaseChecklistRepository();
     this.mediaRepo = mediaRepo ?? new SupabaseMediaRepository();
     this.shareRepo = shareRepo ?? new SupabaseShareTokenRepository();
+    this.companyRepo = companyRepo ?? new SupabaseCompanyRepository();
     this.logger = new Logger('VisitService');
   }
 
@@ -53,24 +58,61 @@ export class VisitService {
       return this.visitRepo.findAll();
     }
 
-    if (!currentUser.companyId) {
-      throw new ForbiddenError('User does not belong to any company');
+    // 1. User has direct companyId
+    if (currentUser.companyId) {
+      return this.visitRepo.findAllByCompanyId(currentUser.companyId);
     }
 
-    return this.visitRepo.findAllByCompanyId(currentUser.companyId);
+    // 2. User has requestedCompany name
+    if (currentUser.requestedCompany) {
+      const company = await this.companyRepo.findByName(currentUser.requestedCompany);
+      if (company) {
+        const companyVisits = await this.visitRepo.findAllByCompanyId(company.id);
+        if (companyVisits && companyVisits.length > 0) {
+          return companyVisits;
+        }
+      }
+    }
+
+    // 3. Fallback: Find visits owned by current user
+    const ownerVisits = await this.visitRepo.findAllByOwnerId(currentUser.id);
+    return ownerVisits || [];
   }
 
   public async createVisit(
     data: { siteName: string; companyId?: string | undefined },
     currentUser: IProfile
   ): Promise<IVisit> {
-    const targetCompanyId =
+    let targetCompanyId =
       currentUser.role === 'super_admin' && data.companyId
         ? data.companyId
         : currentUser.companyId;
 
+    if (!targetCompanyId && currentUser.requestedCompany) {
+      let company = await this.companyRepo.findByName(currentUser.requestedCompany);
+      if (!company) {
+        try {
+          company = await this.companyRepo.create({
+            name: currentUser.requestedCompany,
+            parentId: null,
+            allowedEmailDomains: [],
+          });
+        } catch {
+          company = await this.companyRepo.findByName(currentUser.requestedCompany);
+        }
+      }
+      if (company) {
+        targetCompanyId = company.id;
+      }
+    }
+
     if (!targetCompanyId) {
-      throw new ForbiddenError('No valid company specified for visit creation');
+      const companies = await this.companyRepo.findAll();
+      targetCompanyId = companies[0]?.id || null;
+    }
+
+    if (!targetCompanyId) {
+      throw new ForbiddenError('No company found to associate with this visit');
     }
 
     return this.visitRepo.create({
@@ -108,8 +150,8 @@ export class VisitService {
 
   public assertCanAccessVisit(currentUser: IProfile, visit: IVisit): void {
     if (currentUser.role === 'super_admin') return;
-    if (currentUser.companyId !== visit.companyId) {
-      throw new ForbiddenError('Access denied: Visit belongs to another company');
-    }
+    if (visit.ownerId === currentUser.id) return;
+    if (currentUser.companyId && currentUser.companyId === visit.companyId) return;
+    throw new ForbiddenError('Access denied: Visit belongs to another company');
   }
 }

@@ -53,18 +53,21 @@ export class SupabaseUserRepository implements IUserRepository {
   }
 
   public async create(profile: Omit<IProfile, 'createdAt' | 'updatedAt'>): Promise<IProfile> {
+    const insertPayload: Record<string, unknown> = {
+      id: profile.id,
+      email: profile.email,
+      first_name: profile.firstName,
+      last_name: profile.lastName,
+      middle_name: profile.middleName ?? null,
+      requested_company: profile.requestedCompany ?? null,
+      company_id: profile.companyId,
+      role: profile.role,
+      approval_status: profile.approvalStatus,
+    };
+
     const { data, error } = await this.client
       .from('profiles')
-      .insert({
-        id: profile.id,
-        email: profile.email,
-        first_name: profile.firstName,
-        last_name: profile.lastName,
-        middle_name: profile.middleName ?? null,
-        company_id: profile.companyId,
-        role: profile.role,
-        approval_status: profile.approvalStatus,
-      })
+      .insert(insertPayload)
       .select('*')
       .single();
 
@@ -79,6 +82,7 @@ export class SupabaseUserRepository implements IUserRepository {
     if (updates.firstName !== undefined) dbUpdates['first_name'] = updates.firstName;
     if (updates.lastName !== undefined) dbUpdates['last_name'] = updates.lastName;
     if (updates.middleName !== undefined) dbUpdates['middle_name'] = updates.middleName;
+    if (updates.requestedCompany !== undefined) dbUpdates['requested_company'] = updates.requestedCompany;
     if (updates.companyId !== undefined) dbUpdates['company_id'] = updates.companyId;
     if (updates.role !== undefined) dbUpdates['role'] = updates.role;
     if (updates.approvalStatus !== undefined) dbUpdates['approval_status'] = updates.approvalStatus;
@@ -118,6 +122,7 @@ export class SupabaseUserRepository implements IUserRepository {
       firstName: String(data['first_name'] ?? ''),
       lastName: String(data['last_name'] ?? ''),
       middleName: data['middle_name'] ? String(data['middle_name']) : null,
+      requestedCompany: data['requested_company'] ? String(data['requested_company']) : null,
       companyId: data['company_id'] ? String(data['company_id']) : null,
       role: (data['role'] as UserRoleType) ?? 'standard',
       approvalStatus: (data['approval_status'] as SignupStatusType) ?? 'pending',

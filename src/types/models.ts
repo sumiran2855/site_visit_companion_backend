@@ -15,6 +15,7 @@ export interface IProfile {
   firstName: string;
   lastName: string;
   middleName?: string | null;
+  requestedCompany?: string | null;
   companyId: string | null;
   role: UserRoleType;
   approvalStatus: SignupStatusType;

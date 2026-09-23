@@ -131,9 +131,14 @@ export class AuthService {
           firstName: data.firstName,
           lastName: data.lastName,
           middleName: data.middleName ?? null,
+          requestedCompany: data.requestedCompany,
           companyId: null,
           role: 'standard',
           approvalStatus: 'pending',
+        });
+      } else if (!existingProfile.requestedCompany) {
+        await this.userRepo.update(authUserId, {
+          requestedCompany: data.requestedCompany,
         });
       }
     } catch (profileErr) {
@@ -188,6 +193,7 @@ export class AuthService {
         companyId: company.id,
         role,
         approvalStatus: 'approved',
+        requestedCompany: existingProfile.requestedCompany || request.requestedCompany,
       });
     } else {
       profile = await this.userRepo.create({
@@ -196,6 +202,7 @@ export class AuthService {
         firstName: request.firstName,
         lastName: request.lastName,
         middleName: request.middleName ?? null,
+        requestedCompany: request.requestedCompany,
         companyId: company.id,
         role,
         approvalStatus: 'approved',
@@ -279,6 +286,24 @@ export class AuthService {
       throw new UnauthorizedError('Your account has been deactivated or rejected by an administrator.');
     }
 
+    // Ensure requestedCompany is populated if it was missing from earlier records
+    if (!profile.requestedCompany) {
+      const signupReq = await this.signupRepo.findByEmail(profile.email);
+      if (signupReq?.requestedCompany) {
+        try {
+          const updatedProfile = await this.userRepo.update(profile.id, {
+            requestedCompany: signupReq.requestedCompany,
+          });
+          return {
+            token: data.session.access_token,
+            user: updatedProfile,
+          };
+        } catch {
+          profile.requestedCompany = signupReq.requestedCompany;
+        }
+      }
+    }
+
     return {
       token: data.session.access_token,
       user: profile,
@@ -289,6 +314,12 @@ export class AuthService {
     const profile = await this.userRepo.findById(userId);
     if (!profile) {
       throw new NotFoundError('Profile not found');
+    }
+    if (!profile.requestedCompany) {
+      const signupReq = await this.signupRepo.findByEmail(profile.email);
+      if (signupReq?.requestedCompany) {
+        profile.requestedCompany = signupReq.requestedCompany;
+      }
     }
     return profile;
   }

@@ -24,6 +24,7 @@ export class AuthValidator {
     firstName: z.string().min(1).optional(),
     lastName: z.string().min(1).optional(),
     middleName: z.string().optional().nullable(),
+    requestedCompany: z.string().min(1).optional(),
   });
 }
 

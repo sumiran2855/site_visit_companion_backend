@@ -7,6 +7,7 @@ export class UserModel implements IProfile {
   public firstName: string;
   public lastName: string;
   public middleName?: string | null;
+  public requestedCompany?: string | null;
   public companyId: string | null;
   public role: UserRoleType;
   public approvalStatus: SignupStatusType;
@@ -19,6 +20,7 @@ export class UserModel implements IProfile {
     this.firstName = data.firstName;
     this.lastName = data.lastName;
     this.middleName = data.middleName ?? null;
+    this.requestedCompany = data.requestedCompany ?? null;
     this.companyId = data.companyId;
     this.role = data.role;
     this.approvalStatus = data.approvalStatus;
