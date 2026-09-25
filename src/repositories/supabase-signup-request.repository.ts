@@ -26,11 +26,12 @@ export class SupabaseSignupRequestRepository implements ISignupRequestRepository
     const { data, error } = await this.client
       .from('signup_requests')
       .select('*')
-      .eq('email', email)
-      .maybeSingle();
+      .ilike('email', email.trim())
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-    if (error || !data) return null;
-    return this.mapToSignupRequest(data);
+    if (error || !data || data.length === 0) return null;
+    return this.mapToSignupRequest(data[0]);
   }
 
   public async findAllPending(): Promise<ISignupRequest[]> {
@@ -119,4 +120,3 @@ export class SupabaseSignupRequestRepository implements ISignupRequestRepository
     };
   }
 }
-

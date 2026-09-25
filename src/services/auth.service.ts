@@ -43,34 +43,43 @@ export class AuthService {
 
     const client = SupabaseClientProvider.getInstance().getAdminClient();
 
-    // If an approved account already exists, update its password so the user can sign in
-    if (existingUser && existingUser.approvalStatus === 'approved') {
-      const { data: userList } = await client.auth.admin.listUsers();
-      const authUser = userList.users.find((u) => u.email?.toLowerCase() === normalizedEmail);
-      if (authUser) {
-        await client.auth.admin.updateUserById(authUser.id, {
-          password: data.password,
-          email_confirm: true,
-        });
+    // 1. If an existing profile is found, block duplicate registration
+    if (existingUser) {
+      if (existingUser.approvalStatus === 'approved') {
+        throw new ConflictError('An account with this email already exists. Please sign in instead.');
       }
-      return existingRequest || {
-        id: existingUser.id,
-        email: normalizedEmail,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        middleName: data.middleName ?? null,
-        requestedCompany: data.requestedCompany,
-        status: 'approved',
-        createdAt: existingUser.createdAt,
-        updatedAt: new Date(),
-      };
+      if (existingUser.approvalStatus === 'pending') {
+        throw new ConflictError('A signup request for this email is already pending approval');
+      }
+      if (existingUser.approvalStatus === 'rejected') {
+        throw new ConflictError('Your signup request for this email was rejected. Please contact an administrator.');
+      }
+      throw new ConflictError('An account with this email already exists. Please sign in instead.');
     }
 
-    if (existingRequest && existingRequest.status === 'pending') {
-      throw new ConflictError('A signup request for this email is already pending approval');
+    // 2. If an existing signup request is found, block duplicate registration
+    if (existingRequest) {
+      if (existingRequest.status === 'pending') {
+        throw new ConflictError('A signup request for this email is already pending approval');
+      }
+      if (existingRequest.status === 'approved') {
+        throw new ConflictError('An account with this email already exists. Please sign in instead.');
+      }
+      if (existingRequest.status === 'rejected') {
+        throw new ConflictError('Your signup request for this email was rejected. Please contact an administrator.');
+      }
     }
 
-    // Register user in Supabase Auth as unconfirmed/pending or link existing Google OAuth user
+    // 3. Check if user already exists in Supabase Auth
+    const { data: userList } = await client.auth.admin.listUsers();
+    const existingAuthUser = userList?.users?.find(
+      (u) => u.email?.toLowerCase() === normalizedEmail
+    );
+    if (existingAuthUser) {
+      throw new ConflictError('An account with this email already exists. Please sign in instead.');
+    }
+
+    // 4. Register user in Supabase Auth as unconfirmed/pending
     const { data: authUser, error: authError } = await client.auth.admin.createUser({
       email: normalizedEmail,
       password: data.password,
@@ -82,44 +91,17 @@ export class AuthService {
       },
     });
 
-    let authUserId: string;
-
-    if (authError) {
-      // Check if user already exists in Supabase Auth (e.g. from Google OAuth sign-in)
+    if (authError || !authUser?.user) {
       if (
-        authError.message.includes('already been registered') ||
-        (authError as { code?: string }).code === 'email_exists'
+        authError?.message?.includes('already been registered') ||
+        (authError as { code?: string })?.code === 'email_exists'
       ) {
-        const { data: userList } = await client.auth.admin.listUsers();
-        const existingAuthUser = userList.users.find(
-          (u) => u.email?.toLowerCase() === normalizedEmail
-        );
-
-        if (!existingAuthUser) {
-          throw new ConflictError(authError.message);
-        }
-
-        authUserId = existingAuthUser.id;
-
-        // Update password and user metadata in Supabase
-        await client.auth.admin.updateUserById(existingAuthUser.id, {
-          password: data.password,
-          email_confirm: true,
-          user_metadata: {
-            ...existingAuthUser.user_metadata,
-            first_name: data.firstName,
-            last_name: data.lastName,
-            requested_company: data.requestedCompany,
-          },
-        });
-      } else {
-        throw new ConflictError(authError.message);
+        throw new ConflictError('An account with this email already exists. Please sign in instead.');
       }
-    } else if (authUser?.user) {
-      authUserId = authUser.user.id;
-    } else {
-      throw new ConflictError('Could not create auth account');
+      throw new ConflictError(authError?.message || 'Could not create auth account');
     }
+
+    const authUserId = authUser.user.id;
 
     // Create initial profile in pending status
     try {
@@ -145,10 +127,6 @@ export class AuthService {
       this.logger.warn('Could not pre-create pending profile row, will be created upon approval', {
         error: profileErr,
       });
-    }
-
-    if (existingRequest) {
-      return existingRequest;
     }
 
     return this.signupRepo.create({
@@ -362,6 +340,17 @@ export class AuthService {
           email: normalizedEmail,
           approvalStatus: signupReq.status,
           requestedCompany: signupReq.requestedCompany,
+        };
+      }
+
+      // 1b. Also check if user exists in Supabase Auth
+      const { data: userList } = await client.auth.admin.listUsers();
+      const authUser = userList?.users?.find((u) => u.email?.toLowerCase() === normalizedEmail);
+      if (authUser) {
+        return {
+          email: normalizedEmail,
+          approvalStatus: 'approved',
+          requestedCompany: null,
         };
       }
     }

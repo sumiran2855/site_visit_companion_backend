@@ -26,11 +26,11 @@ export class SupabaseUserRepository implements IUserRepository {
     const { data, error } = await this.client
       .from('profiles')
       .select('*')
-      .eq('email', email)
-      .maybeSingle();
+      .ilike('email', email.trim())
+      .limit(1);
 
-    if (error || !data) return null;
-    return this.mapToProfile(data);
+    if (error || !data || data.length === 0) return null;
+    return this.mapToProfile(data[0]);
   }
 
   public async findAllByCompanyId(companyId: string): Promise<IProfile[]> {
