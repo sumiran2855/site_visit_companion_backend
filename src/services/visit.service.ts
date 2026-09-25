@@ -121,7 +121,7 @@ export class VisitService {
       ownerId: currentUser.id,
       status: 'draft',
       completedFields: 0,
-      totalFields: 73, // Default total fields from specification checklist
+      totalFields: 73,
       completionPercentage: 0,
     });
   }
