@@ -4,8 +4,7 @@ import { EnvConfig } from '../config/env.config.js';
 
 // Polyfill WebSocket for Node.js < 22 environments
 if (typeof globalThis.WebSocket === 'undefined') {
-  // @ts-expect-error ws library is compatible with WebSocket
-  globalThis.WebSocket = WebSocket;
+  (globalThis as unknown as { WebSocket: unknown }).WebSocket = WebSocket;
 }
 
 export class SupabaseClientProvider {
@@ -45,4 +44,3 @@ export class SupabaseClientProvider {
     return this.adminClient;
   }
 }
-

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "start:dev": "tsx src/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,11 +15,7 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@types/archiver": "^8.0.0",
-    "@types/node": "^26.6.2",
-    "@types/ws": "^8.18.1",
-    "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "tsx": "^4.23.15"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1136.0",
@@ -30,10 +27,14 @@
     "@fastify/swagger": "^9.8.1",
     "@fastify/swagger-ui": "^6.1.1",
     "@supabase/supabase-js": "^2.109.0",
+    "@types/archiver": "^8.0.0",
+    "@types/node": "^26.6.2",
+    "@types/ws": "^8.18.1",
     "archiver": "^8.0.0",
     "dotenv": "^18.0.2",
     "fastify": "^5.12.5",
     "playwright": "^1.63.0",
+    "typescript": "^7.0.2",
     "ws": "^8.21.3",
     "zod": "^4.6.5"
   }
