@@ -73,6 +73,27 @@ export interface IVisitMedia {
   updatedAt: Date;
 }
 
+export interface IVisitMediaItem {
+  id: string;
+  section_id: string;
+  field_id: string;
+  type: MediaType;
+  file_name: string;
+  file_size?: number | null;
+  storage_key: string;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface IVisitMediaRecord {
+  id: string;
+  visit_id: string;
+  media: IVisitMediaItem[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface IShareToken {
   id: string;
   visitId: string;
@@ -86,6 +107,26 @@ export interface IPdfTemplate {
   name: string;
   pages: unknown[];
   isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IServiceSection {
+  section_id: string;
+  section_name: string;
+  fields: Record<string, unknown>;
+}
+
+export interface IServicePayload {
+  service_id: string;
+  service_name: string;
+  sections: IServiceSection[];
+}
+
+export interface IVisitRecord {
+  id: string;
+  visit_id: string;
+  service: IServicePayload;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -21,8 +21,46 @@ export class VisitController {
   public getById = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     if (!request.user) throw new UnauthorizedError();
     const { id } = request.params as { id: string };
+    const query = request.query as { include?: string };
+
+    if (query?.include === 'full') {
+      const fullVisit = await this.visitService.getFullVisit(id, request.user);
+      reply.send(ResponseUtil.success(fullVisit));
+      return;
+    }
+
     const visit = await this.visitService.getVisitById(id, request.user);
     reply.send(ResponseUtil.success(visit));
+  };
+
+  public getFull = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    if (!request.user) throw new UnauthorizedError();
+    const { id } = request.params as { id: string };
+    const fullVisit = await this.visitService.getFullVisit(id, request.user);
+    reply.send(ResponseUtil.success(fullVisit));
+  };
+
+  public getRecord = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    if (!request.user) throw new UnauthorizedError();
+    const { id } = request.params as { id: string };
+    const record = await this.visitService.getVisitRecord(id, request.user);
+    reply.send(ResponseUtil.success(record));
+  };
+
+  public saveRecord = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    if (!request.user) throw new UnauthorizedError();
+    const { id } = request.params as { id: string };
+    const validated = VisitValidator.saveVisitRecordSchema.parse(request.body);
+    const saved = await this.visitService.saveVisitRecord(id, validated.service as any, request.user);
+    reply.send(ResponseUtil.success(saved, 'Visit record saved successfully'));
+  };
+
+  public sync = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    if (!request.user) throw new UnauthorizedError();
+    const { id } = request.params as { id: string };
+    const validated = VisitValidator.syncVisitSchema.parse(request.body);
+    const synced = await this.visitService.syncVisit(id, validated as any, request.user);
+    reply.send(ResponseUtil.success(synced, 'Site visit synchronized successfully'));
   };
 
   public create = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -60,4 +98,3 @@ export class VisitController {
     reply.send(ResponseUtil.success(null, 'Visit deleted successfully'));
   };
 }
-

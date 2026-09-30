@@ -6,7 +6,7 @@ export class MediaValidator {
     sectionId: z.string().min(1),
     fieldId: z.string().min(1),
     fileName: z.string().min(1),
-    fileSize: z.number().int().positive().max(100 * 1024 * 1024), // 100MB
+    fileSize: z.number().int().positive().max(500 * 1024 * 1024).optional(), // Up to 500MB for videos
     contentType: z.string().min(1),
     type: z.enum(['photo', 'video']),
     notes: z.string().nullable().optional(),
@@ -23,4 +23,3 @@ export class MediaValidator {
     notes: z.string().nullable().optional(),
   });
 }
-

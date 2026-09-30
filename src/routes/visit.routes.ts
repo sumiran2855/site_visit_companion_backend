@@ -17,8 +17,13 @@ export class VisitRoutes {
     fastify.post('/', this.controller.create);
     fastify.get('/', this.controller.list);
     fastify.get('/:id', this.controller.getById);
+    fastify.get('/:id/full', this.controller.getFull);
+    fastify.get('/:id/record', this.controller.getRecord);
+    fastify.post('/:id/record', this.controller.saveRecord);
+    fastify.put('/:id/record', this.controller.saveRecord);
+    fastify.post('/:id/sync', this.controller.sync);
+    fastify.put('/:id/full', this.controller.sync);
     fastify.patch('/:id', this.controller.update);
     fastify.delete('/:id', this.controller.delete);
   };
 }
-
