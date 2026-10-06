@@ -37,7 +37,37 @@ export class App {
   private async registerPlugins(): Promise<void> {
     // 1. CORS
     await this.fastify.register(cors, {
-      origin: [this.config.frontendUrl, 'http://localhost:3000'],
+      origin: (origin, cb) => {
+        // Allow mobile apps, curl, server-to-server where origin is undefined
+        if (!origin) {
+          cb(null, true);
+          return;
+        }
+
+        // In non-production, allow all local and development origins
+        if (!this.config.isProduction) {
+          cb(null, true);
+          return;
+        }
+
+        const allowedOrigins = [
+          this.config.frontendUrl,
+          'http://localhost:3000',
+          'http://localhost:8081',
+          'http://127.0.0.1:8081',
+          'https://site-visit-companion.vercel.app',
+        ];
+
+        const isAllowed =
+          allowedOrigins.includes(origin) ||
+          origin.endsWith('.vercel.app');
+
+        if (isAllowed) {
+          cb(null, true);
+        } else {
+          cb(new Error('Not allowed by CORS'), false);
+        }
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     });
@@ -120,4 +150,3 @@ export class App {
     return this.fastify;
   }
 }
-

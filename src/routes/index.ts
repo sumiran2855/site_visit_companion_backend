@@ -26,7 +26,7 @@ export class AppRouter {
     await fastify.register(new ShareRoutes().register, { prefix: '/api' });
     await fastify.register(new ExportRoutes().register, { prefix: '/api' });
     await fastify.register(new PdfTemplateRoutes().register, { prefix: '/api/templates' });
+    await fastify.register(new PdfTemplateRoutes().register, { prefix: '/api/pdf-templates' });
     await fastify.register(new AdminRoutes().register, { prefix: '/api/admin' });
   }
 }
-

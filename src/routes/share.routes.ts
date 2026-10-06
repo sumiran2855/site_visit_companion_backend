@@ -14,6 +14,7 @@ export class ShareRoutes {
   public register = async (fastify: FastifyInstance): Promise<void> => {
     // Public shared endpoint
     fastify.get('/public/shared/:token', this.controller.getSharedVisit);
+    fastify.get('/public/visits/:visitId', this.controller.getSharedVisit);
 
     // Protected endpoint to generate share tokens
     fastify.register(async (authScope) => {
@@ -22,4 +23,3 @@ export class ShareRoutes {
     });
   };
 }
-

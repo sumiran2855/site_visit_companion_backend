@@ -26,9 +26,9 @@ export class ShareController {
   };
 
   public getSharedVisit = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const { token } = request.params as { token: string };
-    const result = await this.shareService.getSharedVisit(token);
+    const params = request.params as { token?: string; visitId?: string };
+    const identifier = params.token || params.visitId || '';
+    const result = await this.shareService.getSharedVisit(identifier);
     reply.send(ResponseUtil.success(result));
   };
 }
-

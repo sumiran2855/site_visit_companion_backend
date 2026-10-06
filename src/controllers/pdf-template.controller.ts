@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { PdfTemplateService } from '../services/pdf-template.service.js';
 import { TemplateValidator } from '../validators/template.validator.js';
 import { ResponseUtil } from '../utils/response.util.js';
+import { DEFAULT_ADMIN_PDF_TEMPLATE } from '../config/default-template.config.js';
 
 export class PdfTemplateController {
   private readonly templateService: PdfTemplateService;
@@ -16,7 +17,7 @@ export class PdfTemplateController {
   };
 
   public getDefault = async (_request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const template = await this.templateService.getDefaultTemplate();
+    const template = (await this.templateService.getDefaultTemplate()) || (DEFAULT_ADMIN_PDF_TEMPLATE as any);
     reply.send(ResponseUtil.success(template));
   };
 
@@ -30,10 +31,10 @@ export class PdfTemplateController {
     const validated = TemplateValidator.createTemplateSchema.parse(request.body);
     const body = request.body as { id?: string };
     const template = await this.templateService.saveTemplate({
-      id: body.id,
+      id: validated.id || body.id,
       name: validated.name,
       pages: validated.pages,
-      isDefault: validated.isDefault,
+      isDefault: validated.isDefault ?? true,
     });
     reply.status(201).send(ResponseUtil.success(template, 'Template saved successfully'));
   };

@@ -168,22 +168,26 @@ export class VisitService {
 
     const record = await this.visitRecordRepo.upsertRecord(id, service);
 
-    // Calculate progress from sections and update visit progress
+    // Calculate progress from sections and update visit progress accurately
     let completedFields = 0;
-    let totalFields = 0;
+    const surveyTotalFields = 67; // Exactly 67 audit items across the 11 checklist sections
     if (service && Array.isArray(service.sections)) {
       service.sections.forEach((sec) => {
-        Object.values(sec.fields || {}).forEach((val) => {
-          totalFields += 1;
+        Object.entries(sec.fields || {}).forEach(([key, val]) => {
+          if (key.endsWith('_notes')) return; // field notes are attached to fields, not separate items
           if (val !== null && val !== undefined && val !== '' && val !== false) {
-            completedFields += 1;
+            if (Array.isArray(val)) {
+              if (val.length > 0) completedFields += 1;
+            } else {
+              completedFields += 1;
+            }
           }
         });
       });
     }
 
-    const percentage = totalFields > 0 ? Math.round((completedFields / totalFields) * 100) : 0;
-    await this.visitRepo.updateProgress(id, completedFields, totalFields, percentage);
+    const percentage = surveyTotalFields > 0 ? Math.round((completedFields / surveyTotalFields) * 100) : 0;
+    await this.visitRepo.updateProgress(id, completedFields, surveyTotalFields, percentage);
 
     return {
       id: record.id,

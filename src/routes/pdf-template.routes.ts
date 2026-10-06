@@ -13,18 +13,21 @@ export class PdfTemplateRoutes {
   }
 
   public register = async (fastify: FastifyInstance): Promise<void> => {
-    fastify.addHook('preHandler', this.authMiddleware.handle);
-
-    fastify.get('/', this.controller.list);
+    // Public default template endpoint accessible without login
     fastify.get('/default', this.controller.getDefault);
-    fastify.get('/:id', this.controller.getById);
 
-    fastify.register(async (adminScope) => {
-      adminScope.addHook('preHandler', RoleMiddleware.requireSuperAdmin());
-      adminScope.post('/', this.controller.save);
-      adminScope.patch('/:id/default', this.controller.setDefault);
-      adminScope.delete('/:id', this.controller.delete);
+    fastify.register(async (authScope) => {
+      authScope.addHook('preHandler', this.authMiddleware.handle);
+
+      authScope.get('/', this.controller.list);
+      authScope.get('/:id', this.controller.getById);
+
+      authScope.register(async (adminScope) => {
+        adminScope.addHook('preHandler', RoleMiddleware.requireCompanyAdmin());
+        adminScope.post('/', this.controller.save);
+        adminScope.patch('/:id/default', this.controller.setDefault);
+        adminScope.delete('/:id', this.controller.delete);
+      });
     });
   };
 }
-

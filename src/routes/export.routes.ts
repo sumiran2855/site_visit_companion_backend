@@ -12,11 +12,19 @@ export class ExportRoutes {
   }
 
   public register = async (fastify: FastifyInstance): Promise<void> => {
-    fastify.addHook('preHandler', this.authMiddleware.handle);
+    // Public export endpoints accessible via share token or visit ID
+    fastify.get('/public/shared/:token/export/report-pdf', this.controller.downloadSharedReportPdf);
+    fastify.get('/public/shared/:token/export/zip', this.controller.downloadSharedZip);
+    fastify.get('/public/visits/:visitId/export/report-pdf', this.controller.downloadSharedReportPdf);
+    fastify.get('/public/visits/:visitId/export/zip', this.controller.downloadSharedZip);
 
-    fastify.get('/visits/:visitId/export/zip', this.controller.downloadZip);
-    fastify.get('/visits/:visitId/export/print-pdf', this.controller.downloadPrintPdf);
-    fastify.get('/visits/:visitId/export/report-pdf', this.controller.downloadReportPdf);
+    // Protected visit export endpoints
+    fastify.register(async (authScope) => {
+      authScope.addHook('preHandler', this.authMiddleware.handle);
+
+      authScope.get('/visits/:visitId/export/zip', this.controller.downloadZip);
+      authScope.get('/visits/:visitId/export/print-pdf', this.controller.downloadPrintPdf);
+      authScope.get('/visits/:visitId/export/report-pdf', this.controller.downloadReportPdf);
+    });
   };
 }
-
