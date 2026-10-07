@@ -353,6 +353,13 @@ export class AuthService {
           requestedCompany: null,
         };
       }
+
+      // Email was explicitly provided and not found in profile, requests, or auth
+      return {
+        email: normalizedEmail,
+        approvalStatus: 'not_found',
+        requestedCompany: null,
+      };
     }
 
     // 2. If email is not provided, query Supabase directly by company name
@@ -373,22 +380,11 @@ export class AuthService {
           requestedCompany: String(matchedReq.requested_company),
         };
       }
-    }
 
-    // 3. Fallback to latest signup request in Supabase
-    const { data: latest } = await client
-      .from('signup_requests')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (latest) {
-      const profile = await this.userRepo.findByEmail(latest.email);
       return {
-        email: String(latest.email),
-        approvalStatus: profile ? profile.approvalStatus : (latest.status as SignupStatusType),
-        requestedCompany: String(latest.requested_company),
+        email: '',
+        approvalStatus: 'not_found',
+        requestedCompany: company.trim(),
       };
     }
 
