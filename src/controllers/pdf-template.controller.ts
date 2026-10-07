@@ -1,13 +1,16 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { PdfGeneratorService } from '../services/pdf-generator.service.js';
 import { PdfTemplateService } from '../services/pdf-template.service.js';
 import { TemplateValidator } from '../validators/template.validator.js';
 import { ResponseUtil } from '../utils/response.util.js';
-import { DEFAULT_ADMIN_PDF_TEMPLATE } from '../config/default-template.config.js';
 
 export class PdfTemplateController {
   private readonly templateService: PdfTemplateService;
 
-  constructor(templateService?: PdfTemplateService) {
+  private readonly pdfService: PdfGeneratorService;
+
+  constructor(templateService?: PdfTemplateService, pdfService?: PdfGeneratorService) {
+    this.pdfService = pdfService ?? new PdfGeneratorService();
     this.templateService = templateService ?? new PdfTemplateService();
   }
 
@@ -17,8 +20,23 @@ export class PdfTemplateController {
   };
 
   public getDefault = async (_request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const template = (await this.templateService.getDefaultTemplate()) || (DEFAULT_ADMIN_PDF_TEMPLATE as any);
+    const template = await this.templateService.getActiveTemplate();
     reply.send(ResponseUtil.success(template));
+  };
+
+  public getActive = async (_request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    reply.send(ResponseUtil.success(await this.templateService.getActiveTemplate()));
+  };
+
+  public preview = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const validated = TemplateValidator.createTemplateSchema.parse(request.body);
+    const active = await this.templateService.getActiveTemplate();
+    const tz = (request.query as { tz?: string } | undefined)?.tz;
+    const html = this.pdfService.renderPreviewHtml(
+      { ...active, name: validated.name, pages: validated.pages as typeof active.pages },
+      tz ? { timeZone: tz } : {}
+    );
+    reply.send(ResponseUtil.success({ html }));
   };
 
   public getById = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {

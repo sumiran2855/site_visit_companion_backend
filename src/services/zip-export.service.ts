@@ -15,7 +15,6 @@ import { PdfGeneratorService } from './pdf-generator.service.js';
 import { PdfTemplateService } from './pdf-template.service.js';
 import { ChecklistService } from './checklist.service.js';
 import { CHECKLIST_SECTIONS_CONFIG, getFieldConfig } from '../config/checklist.config.js';
-import { DEFAULT_ADMIN_PDF_TEMPLATE, type PDFTemplateConfig } from '../config/default-template.config.js';
 import { DateUtil } from '../utils/date.util.js';
 import { Logger } from '../utils/logger.js';
 import type { PassThrough } from 'node:stream';
@@ -80,26 +79,12 @@ export class ZipExportService {
     });
 
     // Collect data asynchronously
-    const [answers, mediaWithUrls, defaultTemplate, company] = await Promise.all([
+    const [answers, mediaWithUrls, activeTemplate, company] = await Promise.all([
       this.checklistService.getAnswers(visit.id, currentUser).catch(() => [] as IChecklistAnswer[]),
       this.mediaService.getMediaByVisit(visit.id, currentUser).catch(() => [] as MediaWithSignedUrl[]),
-      this.templateService.getDefaultTemplate().catch(() => null),
+      this.templateService.getActiveTemplate(),
       visit.companyId ? this.companyRepo.findById(visit.companyId).catch(() => null) : null,
     ]);
-
-    const activeTemplate: PDFTemplateConfig = defaultTemplate && defaultTemplate.pages
-      ? {
-          id: defaultTemplate.id,
-          name: defaultTemplate.name,
-          version: '1.2.0',
-          pageSize: 'A4',
-          orientation: 'portrait',
-          margins: 'normal',
-          isDefault: defaultTemplate.isDefault,
-          updatedAt: defaultTemplate.updatedAt ? new Date(defaultTemplate.updatedAt).toISOString() : new Date().toISOString(),
-          pages: defaultTemplate.pages as any,
-        }
-      : DEFAULT_ADMIN_PDF_TEMPLATE;
 
     const companyName = company?.name || 'EC POWER Inc.';
     const technicianName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}`.trim() : 'Certified Field Technician';

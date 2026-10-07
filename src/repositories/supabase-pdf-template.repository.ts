@@ -26,6 +26,8 @@ export class SupabasePdfTemplateRepository implements IPdfTemplateRepository {
       .from('pdf_templates')
       .select('*')
       .eq('is_default', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error || !data) return null;
@@ -86,10 +88,11 @@ export class SupabasePdfTemplateRepository implements IPdfTemplateRepository {
 
   public async setDefault(id: string): Promise<void> {
     await this.resetDefaults();
-    await this.client
+    const { error } = await this.client
       .from('pdf_templates')
       .update({ is_default: true, updated_at: new Date().toISOString() })
       .eq('id', id);
+    if (error) throw new Error(`Failed to set default PDF template: ${error.message}`);
   }
 
   public async delete(id: string): Promise<boolean> {
@@ -102,9 +105,12 @@ export class SupabasePdfTemplateRepository implements IPdfTemplateRepository {
   }
 
   private async resetDefaults(): Promise<void> {
-    await this.client
+    // Supabase rejects an UPDATE without a filter, so target the current defaults explicitly.
+    const { error } = await this.client
       .from('pdf_templates')
-      .update({ is_default: false });
+      .update({ is_default: false })
+      .eq('is_default', true);
+    if (error) throw new Error(`Failed to reset default PDF templates: ${error.message}`);
   }
 
   private mapToTemplate(data: Record<string, unknown>): IPdfTemplate {

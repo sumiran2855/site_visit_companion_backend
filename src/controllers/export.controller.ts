@@ -9,7 +9,6 @@ import { CompanyService } from '../services/company.service.js';
 import { ShareService } from '../services/share.service.js';
 import { UnauthorizedError } from '../errors/unauthorized.error.js';
 import { DateUtil } from '../utils/date.util.js';
-import { DEFAULT_ADMIN_PDF_TEMPLATE, type PDFTemplateConfig } from '../config/default-template.config.js';
 
 export class ExportController {
   private readonly zipService: ZipExportService;
@@ -52,25 +51,22 @@ export class ExportController {
     );
   }
 
-  private async getExportContext(visit: any, user?: any) {
-    const [defaultTemplate, company] = await Promise.all([
-      this.templateService.getDefaultTemplate().catch(() => null),
+  private getTimeZone(request: FastifyRequest): string | undefined {
+    const tz = (request.query as { tz?: string } | undefined)?.tz;
+    if (!tz) return undefined;
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: tz });
+      return tz;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async getExportContext(visit: any, user?: any, timeZone?: string) {
+    const [activeTemplate, company] = await Promise.all([
+      this.templateService.getActiveTemplate(),
       visit.companyId ? this.companyService.getCompanyById(visit.companyId).catch(() => null) : null,
     ]);
-
-    const activeTemplate: PDFTemplateConfig = defaultTemplate && defaultTemplate.pages
-      ? {
-          id: defaultTemplate.id,
-          name: defaultTemplate.name,
-          version: '1.2.0',
-          pageSize: 'A4',
-          orientation: 'portrait',
-          margins: 'normal',
-          isDefault: defaultTemplate.isDefault,
-          updatedAt: defaultTemplate.updatedAt ? new Date(defaultTemplate.updatedAt).toISOString() : new Date().toISOString(),
-          pages: defaultTemplate.pages as any,
-        }
-      : DEFAULT_ADMIN_PDF_TEMPLATE;
 
     const companyName = company?.name || 'EC POWER Inc.';
     const technicianName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Certified Field Technician';
@@ -79,6 +75,7 @@ export class ExportController {
       template: activeTemplate,
       companyName,
       technicianName,
+      ...(timeZone ? { timeZone } : {}),
     };
   }
 
@@ -102,7 +99,7 @@ export class ExportController {
       this.checklistService.getAnswers(visitId, request.user),
     ]);
 
-    const context = await this.getExportContext(visit, request.user);
+    const context = await this.getExportContext(visit, request.user, this.getTimeZone(request));
     const pdfBuffer = await this.pdfService.generatePrintFriendlyPdf(visit, answers, context);
     const sanitizedSite = DateUtil.sanitizeForFilename(visit.siteName);
 
@@ -121,7 +118,7 @@ export class ExportController {
       this.mediaService.getMediaByVisit(visitId, request.user),
     ]);
 
-    const context = await this.getExportContext(visit, request.user);
+    const context = await this.getExportContext(visit, request.user, this.getTimeZone(request));
     const pdfBuffer = await this.pdfService.generateCompletedReportPdf(visit, answers, mediaList, context);
     const sanitizedSite = DateUtil.sanitizeForFilename(visit.siteName);
 
@@ -154,7 +151,7 @@ export class ExportController {
     const context = await this.getExportContext(visitObj, {
       firstName: sharedData.visit.technicianName || 'Certified',
       lastName: 'Technician',
-    });
+    }, this.getTimeZone(request));
     const pdfBuffer = await this.pdfService.generateCompletedReportPdf(visitObj, answers, mediaList, context);
     const sanitizedSite = DateUtil.sanitizeForFilename(sharedData.visit.siteName);
 

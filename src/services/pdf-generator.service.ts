@@ -9,6 +9,7 @@ export interface PdfExportContext {
   companyName?: string;
   technicianName?: string;
   template?: PDFTemplateConfig;
+  timeZone?: string;
 }
 
 export class PdfGeneratorService {
@@ -77,6 +78,64 @@ export class PdfGeneratorService {
     });
 
     return this.renderHtmlToPdf(htmlContent);
+  }
+
+  /**
+   * Renders the exact report HTML for a (possibly unsaved) template using sample data, so Admins
+   * preview what users will get when they download the PDF.
+   */
+  public renderPreviewHtml(template: PDFTemplateConfig, options: { timeZone?: string } = {}): string {
+    const now = new Date();
+    const visit = {
+      id: 'preview',
+      siteName: 'Sample Site — Preview',
+      companyId: '',
+      ownerId: '',
+      status: 'draft',
+      completedFields: 0,
+      totalFields: 0,
+      completionPercentage: 0,
+      createdAt: now,
+      updatedAt: now,
+    } as IVisit;
+
+    const answers: IChecklistAnswer[] = [];
+    for (const sec of CHECKLIST_SECTIONS_CONFIG) {
+      for (const f of sec.fields) {
+        if (f.type === 'photo' || f.type === 'video') continue;
+        const value =
+          f.id === 'mc_meeting_date' ? now.toLocaleDateString('en-GB') :
+          f.id === 'mc_site_name' ? visit.siteName :
+          f.type === 'checkbox' ? 'Yes' :
+          'Sample value';
+        answers.push({ id: f.id, visitId: 'preview', sectionId: sec.id, fieldId: f.id, value, notes: null, createdAt: now, updatedAt: now });
+      }
+    }
+
+    const svg = (n: number) =>
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260"><rect width="100%" height="100%" fill="#E2E8F0"/><text x="50%" y="50%" fill="#64748B" font-family="Arial" font-size="20" text-anchor="middle">Sample photo ${n}</text></svg>`
+      );
+    const media = [1, 2, 3].map((n) => ({
+      id: `preview-${n}`,
+      visitId: 'preview',
+      sectionId: 'sec-boiler-room',
+      fieldId: 'bm_wall1_photos',
+      type: 'photo',
+      fileName: `sample-photo-${n}.jpg`,
+      storageKey: '',
+      createdAt: now,
+      updatedAt: now,
+      signedUrl: svg(n),
+    })) as unknown as MediaWithSignedUrl[];
+
+    return this.renderTemplateHtml(visit, answers, media, {
+      template,
+      technicianName: 'Sample Technician',
+      isPrintable: false,
+      ...(options.timeZone ? { timeZone: options.timeZone } : {}),
+    });
   }
 
   private async renderHtmlToPdf(html: string): Promise<Buffer> {
@@ -175,11 +234,64 @@ export class PdfGeneratorService {
       mediaByField.set(item.fieldId, fList);
     }
 
-    const formattedDate = new Date(visit.createdAt || Date.now()).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    // Audit date = date the visit was created, shown in the requester's time zone
+    // so it matches what the app displays.
+    const formatDate = (d: Date, timeZone?: string): string => {
+      const opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+      try {
+        return d.toLocaleDateString('en-US', { ...opts, ...(timeZone ? { timeZone } : {}) });
+      } catch {
+        return d.toLocaleDateString('en-US', opts);
+      }
+    };
+    const createdAt = visit.createdAt ? new Date(visit.createdAt) : new Date();
+    const formattedDate = formatDate(isNaN(createdAt.getTime()) ? new Date() : createdAt, options.timeZone);
+
+    // Progress is computed from the same data rendered below, using the same rules as the app
+    // (photo/video need media, checkbox needs "Yes", anything else needs a non-empty value).
+    const isFieldComplete = (secId: string, f: { id: string; type: string }): boolean => {
+      if (f.type === 'photo' || f.type === 'video') {
+        return (mediaByField.get(`${secId}:${f.id}`) || mediaByField.get(f.id) || []).length > 0;
+      }
+      const v = (answerMap.get(`${secId}:${f.id}`) || answerMap.get(f.id))?.value;
+      if (v === undefined || v === null || String(v).trim() === '') return false;
+      if (f.type === 'checkbox') return String(v).trim().toLowerCase() === 'yes';
+      return true;
+    };
+    const totalAuditItems = CHECKLIST_SECTIONS_CONFIG.reduce((n, sec) => n + sec.fields.length, 0);
+    const completedAuditItems = CHECKLIST_SECTIONS_CONFIG.reduce(
+      (n, sec) => n + sec.fields.filter((f) => isFieldComplete(sec.id, f)).length,
+      0
+    );
+    const auditPercentage = totalAuditItems > 0 ? Math.round((completedAuditItems / totalAuditItems) * 100) : 0;
+
+    // Template fields using the generic "[value]" placeholder are linked to checklist answers by
+    // element id or label, so Admin-edited templates still show the recorded answer.
+    const FIELD_ALIASES: Record<string, string[]> = {
+      'el-field-date': ['mc_meeting_date'],
+      'el-field-addr': ['mc_address_street', 'mc_address_city', 'mc_address_state', 'mc_address_zip'],
+      'el-field-contact': ['mc_primary_contact_name'],
+      'el-field-gas-pressure': ['bm_supply_temp_notes'],
+    };
+    const normalize = (t?: string) => (t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const LABEL_ALIASES: Record<string, string[]> = {
+      'meeting date time': ['mc_meeting_date'],
+      'site address gps coordinates': FIELD_ALIASES['el-field-addr'] as string[],
+      'primary contact person': ['mc_primary_contact_name'],
+      'incoming natural gas lpg pressure mbar': ['bm_supply_temp_notes'],
+    };
+    const resolveGenericValue = (el: TemplateElement): string => {
+      const ids =
+        FIELD_ALIASES[el.id] ||
+        LABEL_ALIASES[normalize(el.label)] ||
+        CHECKLIST_SECTIONS_CONFIG.flatMap((sec) => sec.fields)
+          .filter((f) => normalize(f.label) === normalize(el.label))
+          .map((f) => f.id);
+      return ids
+        .map((id) => answerMap.get(id)?.value?.trim())
+        .filter((v): v is string => !!v)
+        .join(', ');
+    };
 
     const resolvePlaceholder = (str?: string): string => {
       if (!str) return '';
@@ -239,7 +351,7 @@ export class PdfGeneratorService {
                   <span class="meta-label">AUDIT STATUS</span>
                   <span class="meta-value status-indicator">
                     <span class="status-dot"></span>
-                    ${visit.status} (${visit.completionPercentage}% Complete)
+                    ${visit.status} (${auditPercentage}% Complete)
                   </span>
                 </div>
               </div>
@@ -274,6 +386,11 @@ export class PdfGeneratorService {
         case 'field': {
           let resolvedVal = resolvePlaceholder(el.placeholder);
           let noteText = '';
+
+          // Unbound "[value]" (or other unresolved bracket token) must never be printed literally
+          if (/^\[.*\]$/.test(resolvedVal.trim())) {
+            resolvedVal = resolveGenericValue(el);
+          }
 
           // If placeholder was a field or label matches known fields
           const fieldKey = el.placeholder?.replace(/^\{\{field:|\}\}$/g, '') || el.id;
@@ -363,19 +480,13 @@ export class PdfGeneratorService {
               <div class="autoflow-header">
                 <div>
                   <h3 class="autoflow-title">Complete 11-Section Field Verification Breakdown</h3>
-                  <p class="autoflow-subtitle">Detailed verification status of all 67 audit items across mechanical, electrical, and structural systems.</p>
+                  <p class="autoflow-subtitle">Detailed verification status of all ${totalAuditItems} audit items across mechanical, electrical, and structural systems.</p>
                 </div>
-                <div class="badge badge-emerald">67 / 67 Items Audited</div>
+                <div class="badge ${completedAuditItems === totalAuditItems ? 'badge-emerald' : 'badge-amber'}">${completedAuditItems} / ${totalAuditItems} Items Audited</div>
               </div>
 
               ${CHECKLIST_SECTIONS_CONFIG.map((sec) => {
-                let completedCount = 0;
-                sec.fields.forEach((f) => {
-                  const entry = answerMap.get(`${sec.id}:${f.id}`) || answerMap.get(f.id);
-                  const photos = mediaByField.get(`${sec.id}:${f.id}`) || [];
-                  const hasVal = entry && entry.value !== undefined && entry.value !== null && entry.value !== '';
-                  if (hasVal || photos.length > 0) completedCount++;
-                });
+                const completedCount = sec.fields.filter((f) => isFieldComplete(sec.id, f)).length;
 
                 return `
                   <div class="checklist-section-card">

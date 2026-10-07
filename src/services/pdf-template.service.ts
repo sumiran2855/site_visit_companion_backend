@@ -3,6 +3,7 @@ import type { IPdfTemplate, OptionalUpdate } from '../types/models.js';
 import { SupabasePdfTemplateRepository } from '../repositories/supabase-pdf-template.repository.js';
 import { NotFoundError } from '../errors/not-found.error.js';
 import { Logger } from '../utils/logger.js';
+import { DEFAULT_ADMIN_PDF_TEMPLATE, type PDFTemplateConfig } from '../config/default-template.config.js';
 
 export class PdfTemplateService {
   private readonly templateRepo: IPdfTemplateRepository;
@@ -25,6 +26,26 @@ export class PdfTemplateService {
     return this.templateRepo.findDefault();
   }
 
+  /**
+   * Single source of truth: the Admin-saved active template, or the built-in default
+   * when no Admin template has been saved yet. Used by every PDF generation path.
+   */
+  public async getActiveTemplate(): Promise<PDFTemplateConfig> {
+    const saved = await this.templateRepo.findDefault().catch(() => null);
+    if (saved && Array.isArray(saved.pages) && saved.pages.length > 0) {
+      return {
+        ...DEFAULT_ADMIN_PDF_TEMPLATE,
+        id: saved.id,
+        name: saved.name,
+        isDefault: saved.isDefault,
+        isCustom: true,
+        updatedAt: saved.updatedAt ? new Date(saved.updatedAt).toISOString() : new Date().toISOString(),
+        pages: saved.pages as PDFTemplateConfig['pages'],
+      };
+    }
+    return DEFAULT_ADMIN_PDF_TEMPLATE;
+  }
+
   public async listTemplates(): Promise<IPdfTemplate[]> {
     return this.templateRepo.findAll();
   }
@@ -35,7 +56,10 @@ export class PdfTemplateService {
     pages: unknown[];
     isDefault?: boolean | undefined;
   }): Promise<IPdfTemplate> {
-    if (data.id) {
+    // Only update when the id refers to a persisted template; otherwise (e.g. the built-in
+    // default's client-side id) create a new one so the save is never silently lost.
+    const existing = data.id ? await this.templateRepo.findById(data.id) : null;
+    if (data.id && existing) {
       const updates: OptionalUpdate<IPdfTemplate> = {
         name: data.name,
         pages: data.pages,
@@ -47,7 +71,7 @@ export class PdfTemplateService {
     return this.templateRepo.create({
       name: data.name,
       pages: data.pages,
-      isDefault: data.isDefault ?? false,
+      isDefault: data.isDefault ?? true,
     });
   }
 

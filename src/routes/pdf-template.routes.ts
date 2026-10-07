@@ -15,6 +15,7 @@ export class PdfTemplateRoutes {
   public register = async (fastify: FastifyInstance): Promise<void> => {
     // Public default template endpoint accessible without login
     fastify.get('/default', this.controller.getDefault);
+    fastify.get('/active', this.controller.getActive);
 
     fastify.register(async (authScope) => {
       authScope.addHook('preHandler', this.authMiddleware.handle);
@@ -25,6 +26,7 @@ export class PdfTemplateRoutes {
       authScope.register(async (adminScope) => {
         adminScope.addHook('preHandler', RoleMiddleware.requireCompanyAdmin());
         adminScope.post('/', this.controller.save);
+        adminScope.post('/preview', this.controller.preview);
         adminScope.patch('/:id/default', this.controller.setDefault);
         adminScope.delete('/:id', this.controller.delete);
       });

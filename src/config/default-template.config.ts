@@ -19,6 +19,8 @@ export interface TemplatePage {
 }
 
 export interface PDFTemplateConfig {
+  /** True when this is an Admin-saved template; absent for the built-in default. */
+  isCustom?: boolean;
   id: string;
   name: string;
   version: string;

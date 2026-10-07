@@ -17,6 +17,7 @@ import { ChecklistService } from './checklist.service.js';
 import { NotFoundError } from '../errors/not-found.error.js';
 import { ForbiddenError } from '../errors/forbidden.error.js';
 import { Logger } from '../utils/logger.js';
+import { calculateChecklistProgress } from '../utils/progress.util.js';
 
 export class VisitService {
   private readonly visitRepo: IVisitRepository;
@@ -169,24 +170,16 @@ export class VisitService {
     const record = await this.visitRecordRepo.upsertRecord(id, service);
 
     // Calculate progress from sections and update visit progress accurately
-    let completedFields = 0;
-    const surveyTotalFields = 67; // Exactly 67 audit items across the 11 checklist sections
+    const values = new Map<string, unknown>();
     if (service && Array.isArray(service.sections)) {
       service.sections.forEach((sec) => {
         Object.entries(sec.fields || {}).forEach(([key, val]) => {
-          if (key.endsWith('_notes')) return; // field notes are attached to fields, not separate items
-          if (val !== null && val !== undefined && val !== '' && val !== false) {
-            if (Array.isArray(val)) {
-              if (val.length > 0) completedFields += 1;
-            } else {
-              completedFields += 1;
-            }
-          }
+          if (!key.endsWith('_notes')) values.set(key, val);
         });
       });
     }
-
-    const percentage = surveyTotalFields > 0 ? Math.round((completedFields / surveyTotalFields) * 100) : 0;
+    const { completedFields, totalFields: surveyTotalFields, percentage } =
+      calculateChecklistProgress(values, new Set());
     await this.visitRepo.updateProgress(id, completedFields, surveyTotalFields, percentage);
 
     return {

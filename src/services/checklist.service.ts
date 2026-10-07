@@ -9,6 +9,7 @@ import { SupabaseMediaRepository } from '../repositories/supabase-media.reposito
 import { SupabaseVisitRecordRepository } from '../repositories/supabase-visit-record.repository.js';
 import { VisitService } from './visit.service.js';
 import { Logger } from '../utils/logger.js';
+import { calculateChecklistProgress } from '../utils/progress.util.js';
 
 export class ChecklistService {
   private readonly checklistRepo: IChecklistRepository;
@@ -175,26 +176,10 @@ export class ChecklistService {
 
     if (!visit) return;
 
-    // Count answered text fields
-    const filledAnswerFieldIds = new Set(
-      answers
-        .filter((a) => a.value.trim().length > 0)
-        .map((a) => `${a.sectionId}:${a.fieldId}`)
-    );
-
-    // Count answered media fields
-    const filledMediaFieldIds = new Set(
-      media.map((m) => `${m.sectionId}:${m.fieldId}`)
-    );
-
-    const uniqueCompletedFields = new Set([
-      ...filledAnswerFieldIds,
-      ...filledMediaFieldIds,
-    ]).size;
-
-    const totalFields = 67;
-    const percentage =
-      totalFields > 0 ? Math.min(100, Math.max(0, Math.round((uniqueCompletedFields / totalFields) * 100))) : 0;
+    const values = new Map<string, unknown>(answers.map((a) => [a.fieldId, a.value]));
+    const mediaFieldIds = new Set(media.map((m) => m.fieldId));
+    const { completedFields: uniqueCompletedFields, totalFields, percentage } =
+      calculateChecklistProgress(values, mediaFieldIds);
 
     await this.visitRepo.updateProgress(
       visitId,
