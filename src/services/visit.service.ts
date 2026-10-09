@@ -4,7 +4,7 @@ import type { IMediaRepository } from '../repositories/interfaces/media.reposito
 import type { IShareTokenRepository } from '../repositories/interfaces/share-token.repository.interface.js';
 import type { ICompanyRepository } from '../repositories/interfaces/company.repository.interface.js';
 import type { IVisitRecordRepository } from '../repositories/interfaces/visit-record.repository.interface.js';
-import type { IVisit, IProfile, OptionalUpdate, IServicePayload, IVisitRecord } from '../types/models.js';
+import type { IVisit, IProfile, OptionalUpdate, IServicePayload } from '../types/models.js';
 import type { VisitStatusType, MediaType } from '../types/roles.js';
 import { SupabaseVisitRepository } from '../repositories/supabase-visit.repository.js';
 import { SupabaseChecklistRepository } from '../repositories/supabase-checklist.repository.js';
@@ -13,7 +13,6 @@ import { SupabaseShareTokenRepository } from '../repositories/supabase-share-tok
 import { SupabaseCompanyRepository } from '../repositories/supabase-company.repository.js';
 import { SupabaseVisitRecordRepository } from '../repositories/supabase-visit-record.repository.js';
 import { StorageService } from './storage.service.js';
-import { ChecklistService } from './checklist.service.js';
 import { NotFoundError } from '../errors/not-found.error.js';
 import { ForbiddenError } from '../errors/forbidden.error.js';
 import { Logger } from '../utils/logger.js';

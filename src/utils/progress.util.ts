@@ -1,16 +1,6 @@
 import { CHECKLIST_SECTIONS_CONFIG } from '../config/checklist.config.js';
+import type { ChecklistProgress } from '../types/models.js';
 
-export interface ChecklistProgress {
-  completedFields: number;
-  totalFields: number;
-  percentage: number;
-}
-
-/**
- * Single audit-progress rule shared with the mobile app: photo/video fields need media,
- * checkbox fields need "Yes", every other field needs a non-empty value.
- * `values` maps fieldId -> answer (arrays count as media); `mediaFieldIds` lists fields with uploads.
- */
 export function calculateChecklistProgress(
   values: Map<string, unknown>,
   mediaFieldIds: Set<string>

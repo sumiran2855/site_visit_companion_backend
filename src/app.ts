@@ -74,7 +74,7 @@ export class App {
 
     // 2. Helmet Security Headers
     await this.fastify.register(helmet, {
-      contentSecurityPolicy: false, // Allows swagger and iframe/pdf embeds if needed
+      contentSecurityPolicy: false,
     });
 
     // 3. Rate Limiting

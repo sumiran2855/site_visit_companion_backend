@@ -2,7 +2,6 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 import { EnvConfig } from '../config/env.config.js';
 
-// Polyfill WebSocket for Node.js < 22 environments
 if (typeof globalThis.WebSocket === 'undefined') {
   (globalThis as unknown as { WebSocket: unknown }).WebSocket = WebSocket;
 }

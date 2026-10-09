@@ -11,7 +11,7 @@ export class CompanyScopeMiddleware {
       }
 
       if (user.role === 'super_admin') {
-        return; // Super admin has global access across companies
+        return;
       }
 
       const params = request.params as Record<string, string>;

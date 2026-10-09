@@ -3,7 +3,7 @@ import { SupabaseClientProvider } from '../database/supabase.client.js';
 async function runMigration() {
   const client = SupabaseClientProvider.getInstance().getAdminClient();
 
-  console.log('🔄 Fetching all existing checklist answers...');
+  console.log('Fetching all existing checklist answers...');
   const { data: answers, error: answersErr } = await client
     .from('checklist_answers')
     .select('*');

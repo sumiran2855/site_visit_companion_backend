@@ -1,5 +1,5 @@
 import type { IMediaRepository } from '../repositories/interfaces/media.repository.interface.js';
-import type { IVisitMedia, IProfile } from '../types/models.js';
+import type { IVisitMedia, IProfile, PresignedUploadResult, MediaWithSignedUrl } from '../types/models.js';
 import type { MediaType } from '../types/roles.js';
 import { SupabaseMediaRepository } from '../repositories/supabase-media.repository.js';
 import { StorageService } from './storage.service.js';
@@ -8,16 +8,6 @@ import { ChecklistService } from './checklist.service.js';
 import { NotFoundError } from '../errors/not-found.error.js';
 import { DateUtil } from '../utils/date.util.js';
 import { Logger } from '../utils/logger.js';
-
-export interface PresignedUploadResult {
-  uploadUrl: string;
-  storageKey: string;
-  expiresInSeconds: number;
-}
-
-export interface MediaWithSignedUrl extends IVisitMedia {
-  signedUrl: string;
-}
 
 export class MediaService {
   private readonly mediaRepo: IMediaRepository;

@@ -1,3 +1,4 @@
+import type { PDFTemplateConfig } from '../config/default-template.config.js';
 import type { UserRoleType, SignupStatusType, VisitStatusType, MediaType } from './roles.js';
 
 export interface ICompany {
@@ -134,3 +135,52 @@ export interface IVisitRecord {
 export type OptionalUpdate<T> = {
   [P in keyof T]?: T[P] | undefined;
 };
+
+export interface ChecklistProgress {
+  completedFields: number;
+  totalFields: number;
+  percentage: number;
+}
+
+export interface PresignedUploadResult {
+  uploadUrl: string;
+  storageKey: string;
+  expiresInSeconds: number;
+}
+
+export interface MediaWithSignedUrl extends IVisitMedia {
+  signedUrl: string;
+}
+
+export interface PdfExportContext {
+  companyName?: string;
+  technicianName?: string;
+  template?: PDFTemplateConfig;
+  timeZone?: string;
+}
+
+export interface SharedVisitPayload {
+  visit: {
+    id: string;
+    siteName: string;
+    status: string;
+    completedFields: number;
+    totalFields: number;
+    completionPercentage: number;
+    createdAt: Date;
+    updatedAt: Date;
+    companyName?: string;
+    technicianName?: string;
+  };
+  service?: IServicePayload | null;
+  answers: IChecklistAnswer[];
+  media: Array<{
+    id: string;
+    sectionId: string;
+    fieldId: string;
+    type: string;
+    fileName: string;
+    signedUrl: string;
+    notes: string | null;
+  }>;
+}

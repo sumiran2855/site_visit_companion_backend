@@ -6,7 +6,7 @@ import type { IMediaRepository } from '../repositories/interfaces/media.reposito
 import type { IVisitRecordRepository } from '../repositories/interfaces/visit-record.repository.interface.js';
 import type { ICompanyRepository } from '../repositories/interfaces/company.repository.interface.js';
 import type { IUserRepository } from '../repositories/interfaces/user.repository.interface.js';
-import type { IShareToken, IChecklistAnswer, IProfile, IServicePayload } from '../types/models.js';
+import type { IShareToken, IChecklistAnswer, IProfile, IServicePayload, SharedVisitPayload } from '../types/models.js';
 import { SupabaseShareTokenRepository } from '../repositories/supabase-share-token.repository.js';
 import { SupabaseVisitRepository } from '../repositories/supabase-visit.repository.js';
 import { SupabaseChecklistRepository } from '../repositories/supabase-checklist.repository.js';
@@ -20,32 +20,6 @@ import { NotFoundError } from '../errors/not-found.error.js';
 import { UnauthorizedError } from '../errors/unauthorized.error.js';
 import { DateUtil } from '../utils/date.util.js';
 import { Logger } from '../utils/logger.js';
-
-export interface SharedVisitPayload {
-  visit: {
-    id: string;
-    siteName: string;
-    status: string;
-    completedFields: number;
-    totalFields: number;
-    completionPercentage: number;
-    createdAt: Date;
-    updatedAt: Date;
-    companyName?: string;
-    technicianName?: string;
-  };
-  service?: IServicePayload | null;
-  answers: IChecklistAnswer[];
-  media: Array<{
-    id: string;
-    sectionId: string;
-    fieldId: string;
-    type: string;
-    fileName: string;
-    signedUrl: string;
-    notes: string | null;
-  }>;
-}
 
 export class ShareService {
   private readonly shareRepo: IShareTokenRepository;

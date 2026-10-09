@@ -1,16 +1,8 @@
 import { chromium, type Browser } from 'playwright';
-import type { IVisit, IChecklistAnswer } from '../types/models.js';
-import type { MediaWithSignedUrl } from './media.service.js';
+import type { IVisit, IChecklistAnswer, MediaWithSignedUrl, PdfExportContext } from '../types/models.js';
 import { Logger } from '../utils/logger.js';
 import { CHECKLIST_SECTIONS_CONFIG } from '../config/checklist.config.js';
 import { DEFAULT_ADMIN_PDF_TEMPLATE, type PDFTemplateConfig, type TemplateElement } from '../config/default-template.config.js';
-
-export interface PdfExportContext {
-  companyName?: string;
-  technicianName?: string;
-  template?: PDFTemplateConfig;
-  timeZone?: string;
-}
 
 export class PdfGeneratorService {
   private browser: Browser | null = null;
