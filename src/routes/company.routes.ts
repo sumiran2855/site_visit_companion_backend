@@ -13,14 +13,14 @@ export class CompanyRoutes {
   }
 
   public register = async (fastify: FastifyInstance): Promise<void> => {
-    fastify.addHook('preHandler', this.authMiddleware.handle);
-
+    // Read-only company routes (public for signup autocomplete & branch exploration)
     fastify.get('/', this.controller.list);
     fastify.get('/tree', this.controller.getTree);
     fastify.get('/:id', this.controller.getById);
 
     // Admin only management
     fastify.register(async (adminScope) => {
+      adminScope.addHook('preHandler', this.authMiddleware.handle);
       adminScope.addHook('preHandler', RoleMiddleware.requireSuperAdmin());
       adminScope.post('/', this.controller.create);
       adminScope.patch('/:id', this.controller.update);
