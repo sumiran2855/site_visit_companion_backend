@@ -19,6 +19,7 @@ import { VisitService } from './visit.service.js';
 import { NotFoundError } from '../errors/not-found.error.js';
 import { UnauthorizedError } from '../errors/unauthorized.error.js';
 import { DateUtil } from '../utils/date.util.js';
+import { calculateChecklistProgress } from '../utils/progress.util.js';
 import { Logger } from '../utils/logger.js';
 
 export class ShareService {
@@ -217,14 +218,25 @@ export class ShareService {
       }
     }
 
+    // Recompute progress against the current checklist config so shared links always reflect
+    // the full set of fields (e.g. 67), even when the stored visit counters are stale.
+    const progressValues = new Map<string, unknown>();
+    for (const a of mergedAnswers) {
+      if (a.value !== undefined && a.value !== null && String(a.value).trim() !== '') {
+        progressValues.set(a.fieldId, a.value);
+      }
+    }
+    const mediaFieldIds = new Set<string>(mediaWithUrls.map((m) => m.fieldId));
+    const progress = calculateChecklistProgress(progressValues, mediaFieldIds);
+
     return {
       visit: {
         id: visit.id,
         siteName: visit.siteName,
         status: visit.status,
-        completedFields: visit.completedFields,
-        totalFields: visit.totalFields,
-        completionPercentage: visit.completionPercentage,
+        completedFields: progress.completedFields,
+        totalFields: progress.totalFields,
+        completionPercentage: progress.percentage,
         createdAt: visit.createdAt,
         updatedAt: visit.updatedAt,
         companyName: company?.name || 'EC POWER',
