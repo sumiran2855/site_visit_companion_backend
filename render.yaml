@@ -9,6 +9,9 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     envVars:
+      # Install/load Chromium inside node_modules so it survives from build to runtime on Render
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: "0"
       - key: NODE_ENV
         value: production
       - key: SUPABASE_URL
