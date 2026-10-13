@@ -13,12 +13,12 @@ export function calculateChecklistProgress(
       total += 1;
       const v = values.get(f.id);
       if (f.type === 'photo' || f.type === 'video') {
-        if (mediaFieldIds.has(f.id) || (Array.isArray(v) && v.length > 0)) completed += 1;
+        if (mediaFieldIds.has(f.id) || (Array.isArray(v) ? v.length > 0 : v !== null && typeof v === 'object')) completed += 1;
       } else if (f.type === 'checkbox') {
         if (v === true || String(v ?? '').trim().toLowerCase() === 'yes' || String(v ?? '').trim().toLowerCase() === 'true') {
           completed += 1;
         }
-      } else if (v !== undefined && v !== null && !Array.isArray(v) && String(v).trim() !== '') {
+      } else if (v !== undefined && v !== null && !Array.isArray(v) && typeof v !== 'object' && String(v).trim() !== '') {
         completed += 1;
       }
     }
