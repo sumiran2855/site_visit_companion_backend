@@ -55,6 +55,7 @@ export class App {
           'http://localhost:3000',
           'http://localhost:8081',
           'http://127.0.0.1:8081',
+          'https://sitevisitcompanion-mobile.vercel.app',
           'https://site-visit-companion.vercel.app',
         ];
 

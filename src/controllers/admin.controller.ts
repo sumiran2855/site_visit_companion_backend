@@ -3,6 +3,7 @@ import { AuthService } from '../services/auth.service.js';
 import { RetentionCleanupService } from '../services/retention-cleanup.service.js';
 import { SupabaseUserRepository } from '../repositories/supabase-user.repository.js';
 import { SupabaseSignupRequestRepository } from '../repositories/supabase-signup-request.repository.js';
+import { SupabaseCompanyRepository } from '../repositories/supabase-company.repository.js';
 import { AuthValidator } from '../validators/auth.validator.js';
 import { ResponseUtil } from '../utils/response.util.js';
 import type { UserRoleType } from '../types/roles.js';
@@ -12,17 +13,20 @@ export class AdminController {
   private readonly retentionService: RetentionCleanupService;
   private readonly userRepo: SupabaseUserRepository;
   private readonly signupRepo: SupabaseSignupRequestRepository;
+  private readonly companyRepo: SupabaseCompanyRepository;
 
   constructor(
     authService?: AuthService,
     retentionService?: RetentionCleanupService,
     userRepo?: SupabaseUserRepository,
-    signupRepo?: SupabaseSignupRequestRepository
+    signupRepo?: SupabaseSignupRequestRepository,
+    companyRepo?: SupabaseCompanyRepository
   ) {
     this.authService = authService ?? new AuthService();
     this.retentionService = retentionService ?? new RetentionCleanupService();
     this.userRepo = userRepo ?? new SupabaseUserRepository();
     this.signupRepo = signupRepo ?? new SupabaseSignupRequestRepository();
+    this.companyRepo = companyRepo ?? new SupabaseCompanyRepository();
   }
 
   public listPendingRequests = async (_request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -71,6 +75,26 @@ export class AdminController {
     const { id } = request.params as { id: string };
     const body = request.body as { companyId: string };
     const updated = await this.userRepo.update(id, { companyId: body.companyId });
+
+    if (updated.email && body.companyId) {
+      try {
+        const targetCompany = await this.companyRepo.findById(body.companyId);
+        if (targetCompany) {
+          const userEmail = updated.email.trim().toLowerCase();
+          const currentDomains = Array.isArray(targetCompany.allowedEmailDomains)
+            ? targetCompany.allowedEmailDomains
+            : [];
+          if (!currentDomains.some((d: string) => d.toLowerCase() === userEmail)) {
+            await this.companyRepo.update(targetCompany.id, {
+              allowedEmailDomains: [...currentDomains, userEmail],
+            });
+          }
+        }
+      } catch {
+        // Continue safely if company update fails
+      }
+    }
+
     reply.send(ResponseUtil.success(updated, 'User company updated'));
   };
 

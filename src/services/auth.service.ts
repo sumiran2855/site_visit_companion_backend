@@ -189,6 +189,23 @@ export class AuthService {
 
     await this.signupRepo.updateStatus(requestId, 'approved');
     this.logger.info(`Signup request approved for ${request.email}`, { companyId, role });
+
+    // Automatically append user email to company's allowed_email_domains in database
+    try {
+      const userEmail = request.email.trim().toLowerCase();
+      const currentDomains = Array.isArray(company.allowedEmailDomains)
+        ? company.allowedEmailDomains
+        : [];
+      if (!currentDomains.some((d: string) => d.toLowerCase() === userEmail)) {
+        await this.companyRepo.update(company.id, {
+          allowedEmailDomains: [...currentDomains, userEmail],
+        });
+        this.logger.info(`Added ${userEmail} to allowed_email_domains for company ${company.name}`);
+      }
+    } catch (domainErr) {
+      this.logger.warn('Failed to append user email to company allowed_email_domains', { error: domainErr });
+    }
+
     return profile;
   }
 
