@@ -315,7 +315,7 @@ export class VisitService {
   }
 
   public async listVisits(currentUser: IProfile, filterCompanyId?: string): Promise<IVisit[]> {
-    if (currentUser.role === 'super_admin') {
+    if (currentUser.role === 'admin' || currentUser.role === 'super_admin') {
       if (filterCompanyId) {
         return this.visitRepo.findAllByCompanyId(filterCompanyId);
       }
@@ -348,7 +348,7 @@ export class VisitService {
     currentUser: IProfile
   ): Promise<IVisit> {
     let targetCompanyId =
-      currentUser.role === 'super_admin' && data.companyId
+      (currentUser.role === 'admin' || currentUser.role === 'super_admin') && data.companyId
         ? data.companyId
         : currentUser.companyId;
 
@@ -413,7 +413,7 @@ export class VisitService {
   }
 
   public assertCanAccessVisit(currentUser: IProfile, visit: IVisit): void {
-    if (currentUser.role === 'super_admin') return;
+    if (currentUser.role === 'admin' || currentUser.role === 'super_admin') return;
     if (visit.ownerId === currentUser.id) return;
     if (currentUser.companyId && currentUser.companyId === visit.companyId) return;
     throw new ForbiddenError('Access denied: Visit belongs to another company');

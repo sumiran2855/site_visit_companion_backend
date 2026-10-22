@@ -10,7 +10,7 @@ export class CompanyScopeMiddleware {
         throw new UnauthorizedError('User is not authenticated');
       }
 
-      if (user.role === 'super_admin') {
+      if (user.role === 'admin' || user.role === 'super_admin') {
         return;
       }
 
@@ -23,4 +23,3 @@ export class CompanyScopeMiddleware {
     };
   }
 }
-

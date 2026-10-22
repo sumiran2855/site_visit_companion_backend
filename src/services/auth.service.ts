@@ -115,7 +115,7 @@ export class AuthService {
           middleName: data.middleName ?? null,
           requestedCompany: data.requestedCompany,
           companyId: null,
-          role: 'standard',
+          role: 'user',
           approvalStatus: 'pending',
         });
       } else if (!existingProfile.requestedCompany) {
@@ -142,7 +142,7 @@ export class AuthService {
   public async approveSignupRequest(
     requestId: string,
     companyId: string,
-    role: UserRoleType = 'standard'
+    role: UserRoleType = 'user'
   ): Promise<IProfile> {
     const request = await this.signupRepo.findById(requestId);
     if (!request) {

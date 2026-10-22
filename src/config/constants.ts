@@ -9,9 +9,12 @@ export const APP_CONSTANTS = {
 } as const;
 
 export const ROLES = {
-  STANDARD: 'standard',
-  COMPANY_ADMIN: 'company_admin',
-  SUPER_ADMIN: 'super_admin',
+  USER: 'user',
+  ADMIN: 'admin',
+  // Backward compatibility aliases
+  STANDARD: 'user',
+  COMPANY_ADMIN: 'admin',
+  SUPER_ADMIN: 'admin',
 } as const;
 
 export const SIGNUP_STATUS = {
@@ -30,4 +33,3 @@ export const MEDIA_TYPE = {
   PHOTO: 'photo',
   VIDEO: 'video',
 } as const;
-

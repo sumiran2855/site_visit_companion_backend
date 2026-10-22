@@ -10,18 +10,32 @@ export class RoleMiddleware {
         throw new UnauthorizedError('User is not authenticated');
       }
 
-      if (!allowedRoles.includes(request.user.role)) {
-        throw new ForbiddenError(`User role '${request.user.role}' is not authorized to access this resource`);
+      const role = request.user.role;
+      const normalizedRole: UserRoleType =
+        role === 'admin' || role === 'super_admin' || role === 'company_admin'
+          ? 'admin'
+          : 'user';
+
+      const isAllowed =
+        allowedRoles.includes(role) ||
+        allowedRoles.includes(normalizedRole) ||
+        (allowedRoles.includes('admin') && (role === 'super_admin' || role === 'company_admin'));
+
+      if (!isAllowed) {
+        throw new ForbiddenError(`User role '${role}' is not authorized to access this resource`);
       }
     };
   }
 
+  public static requireAdmin() {
+    return RoleMiddleware.authorize(['admin', 'company_admin', 'super_admin']);
+  }
+
   public static requireSuperAdmin() {
-    return RoleMiddleware.authorize(['super_admin']);
+    return RoleMiddleware.requireAdmin();
   }
 
   public static requireCompanyAdmin() {
-    return RoleMiddleware.authorize(['company_admin', 'super_admin']);
+    return RoleMiddleware.requireAdmin();
   }
 }
-

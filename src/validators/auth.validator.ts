@@ -17,7 +17,14 @@ export class AuthValidator {
 
   public static readonly approveRequestSchema = z.object({
     companyId: z.string().uuid(),
-    role: z.enum(['standard', 'company_admin', 'super_admin']).default('standard'),
+    role: z
+      .enum(['user', 'admin', 'standard', 'company_admin', 'super_admin'])
+      .transform((r) =>
+        r === 'admin' || r === 'super_admin' || r === 'company_admin'
+          ? 'admin'
+          : 'user'
+      )
+      .default('user'),
   });
 
   public static readonly updateProfileSchema = z.object({

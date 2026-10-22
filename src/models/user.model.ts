@@ -22,7 +22,10 @@ export class UserModel implements IProfile {
     this.middleName = data.middleName ?? null;
     this.requestedCompany = data.requestedCompany ?? null;
     this.companyId = data.companyId;
-    this.role = data.role;
+    this.role =
+      data.role === 'admin' || data.role === 'super_admin' || data.role === 'company_admin'
+        ? 'admin'
+        : 'user';
     this.approvalStatus = data.approvalStatus;
     this.createdAt = data.createdAt instanceof Date ? data.createdAt : new Date(data.createdAt);
     this.updatedAt = data.updatedAt instanceof Date ? data.updatedAt : new Date(data.updatedAt);
@@ -39,17 +42,24 @@ export class UserModel implements IProfile {
     return this.approvalStatus === 'approved';
   }
 
+  public isAdmin(): boolean {
+    return this.role === 'admin' || this.role === 'super_admin' || this.role === 'company_admin';
+  }
+
   public isSuperAdmin(): boolean {
-    return this.role === 'super_admin';
+    return this.isAdmin();
   }
 
   public isCompanyAdmin(): boolean {
-    return this.role === 'company_admin' || this.isSuperAdmin();
+    return this.isAdmin();
+  }
+
+  public isUser(): boolean {
+    return !this.isAdmin();
   }
 
   public canAccessCompany(companyId: string): boolean {
-    if (this.isSuperAdmin()) return true;
+    if (this.isAdmin()) return true;
     return this.companyId === companyId;
   }
 }
-

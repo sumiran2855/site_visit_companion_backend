@@ -116,6 +116,12 @@ export class SupabaseUserRepository implements IUserRepository {
   }
 
   private mapToProfile(data: Record<string, unknown>): IProfile {
+    const rawRole = String(data['role'] ?? 'user');
+    const role: UserRoleType =
+      rawRole === 'admin' || rawRole === 'super_admin' || rawRole === 'company_admin'
+        ? 'admin'
+        : 'user';
+
     return {
       id: String(data['id']),
       email: String(data['email'] ?? ''),
@@ -124,7 +130,7 @@ export class SupabaseUserRepository implements IUserRepository {
       middleName: data['middle_name'] ? String(data['middle_name']) : null,
       requestedCompany: data['requested_company'] ? String(data['requested_company']) : null,
       companyId: data['company_id'] ? String(data['company_id']) : null,
-      role: (data['role'] as UserRoleType) ?? 'standard',
+      role,
       approvalStatus: (data['approval_status'] as SignupStatusType) ?? 'pending',
       createdAt: new Date(String(data['created_at'])),
       updatedAt: new Date(String(data['updated_at'])),
