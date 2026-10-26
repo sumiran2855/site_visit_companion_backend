@@ -172,7 +172,12 @@ export class AdminController {
     } else if (body?.sendNow) {
       updated = await this.submissionService.sendCustomerRequests(id);
     } else if (body?.areaId && body?.text) {
-      updated = await this.submissionService.queueCustomerRequest(id, body.areaId, body.text);
+      updated = await this.submissionService.queueCustomerRequest(
+        id,
+        body.areaId,
+        body.text,
+        body.requestId
+      );
     } else {
       updated = await this.submissionService.getSubmissionById(id);
     }

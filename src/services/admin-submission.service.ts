@@ -55,6 +55,10 @@ export interface CustomerRequest {
   areaName: string;
   text: string;
   createdAt: string;
+  resolved?: boolean;
+  resolvedAt?: string;
+  technicianResponse?: string;
+  responsePhotos?: any[];
 }
 
 export interface SiteSubmission {
@@ -342,7 +346,8 @@ export class AdminSubmissionService {
   public async queueCustomerRequest(
     id: string,
     areaId: string,
-    text: string
+    text: string,
+    requestId?: string
   ): Promise<SiteSubmission | null> {
     const visit = await this.visitRepo.findById(id);
     if (!visit) return null;
@@ -364,7 +369,11 @@ export class AdminSubmissionService {
       ? SECTION_NAMES[areaId] || section.section_name || humanizeFieldId(areaId)
       : 'Area';
 
-    const existingIndex = requests.findIndex((r) => r.areaId === areaId);
+    // If an existing requestId is provided, update that request; otherwise append to queue
+    const existingIndex = requestId
+      ? requests.findIndex((r) => r.id === requestId)
+      : -1;
+
     if (existingIndex >= 0 && requests[existingIndex]) {
       requests[existingIndex].text = text;
     } else {
@@ -408,8 +417,16 @@ export class AdminSubmissionService {
 
     const req = requests.find((r) => r.id === requestId);
     if (req) {
+      const remainingForArea = requests.filter((r) => r.id !== requestId && r.areaId === req.areaId);
       if (review.areaStatuses && review.areaStatuses[req.areaId]) {
-        review.areaStatuses[req.areaId] = { status: 'not_reviewed' };
+        if (remainingForArea.length === 0) {
+          review.areaStatuses[req.areaId] = { status: 'not_reviewed' };
+        } else {
+          review.areaStatuses[req.areaId] = {
+            status: 'more_requested',
+            requestedNote: remainingForArea[remainingForArea.length - 1]!.text,
+          };
+        }
       }
       review.customerRequests = requests.filter((r) => r.id !== requestId);
       review.updatedAt = new Date().toISOString();

@@ -166,6 +166,29 @@ export class VisitService {
   ): Promise<any> {
     await this.getVisitById(id, currentUser);
 
+    // Safeguard: preserve existing review data and customer requests if not supplied or partially supplied
+    try {
+      const existing = await this.visitRecordRepo.findByVisitId(id);
+      const existingReview = (existing?.service as any)?.review;
+      if (existingReview) {
+        if (!(service as any).review) {
+          (service as any).review = existingReview;
+        } else {
+          // Merge to ensure no existing review fields (e.g. customerRequests or approvalChecklist) are wiped out
+          (service as any).review = {
+            ...existingReview,
+            ...(service as any).review,
+            areaStatuses: {
+              ...(existingReview.areaStatuses || {}),
+              ...((service as any).review.areaStatuses || {}),
+            },
+          };
+        }
+      }
+    } catch {
+      // Continue if record not found yet
+    }
+
     const record = await this.visitRecordRepo.upsertRecord(id, service);
 
     // Calculate progress from sections and update visit progress accurately
