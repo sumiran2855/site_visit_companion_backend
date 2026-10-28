@@ -12,10 +12,46 @@ export class AuthRoutes {
   }
 
   public register = async (fastify: FastifyInstance): Promise<void> => {
-    fastify.post('/signup', this.controller.signupRequest);
-    fastify.post('/login', this.controller.login);
+    fastify.post(
+      '/signup',
+      {
+        config: {
+          rateLimit: {
+            max: 5,
+            timeWindow: '1 minute',
+          },
+        },
+      },
+      this.controller.signupRequest
+    );
+
+    fastify.post(
+      '/login',
+      {
+        config: {
+          rateLimit: {
+            max: 10,
+            timeWindow: '1 minute',
+          },
+        },
+      },
+      this.controller.login
+    );
+
     fastify.post('/logout', this.controller.logout);
-    fastify.get('/status', this.controller.checkStatus);
+
+    fastify.get(
+      '/status',
+      {
+        config: {
+          rateLimit: {
+            max: 30,
+            timeWindow: '1 minute',
+          },
+        },
+      },
+      this.controller.checkStatus
+    );
 
     fastify.register(async (authenticatedScope) => {
       authenticatedScope.addHook('preHandler', this.authMiddleware.handle);

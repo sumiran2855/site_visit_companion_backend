@@ -6,6 +6,7 @@ import { SupabaseUserRepository } from '../repositories/supabase-user.repository
 import { SupabaseSignupRequestRepository } from '../repositories/supabase-signup-request.repository.js';
 import { SupabaseCompanyRepository } from '../repositories/supabase-company.repository.js';
 import { AuthValidator } from '../validators/auth.validator.js';
+import { AdminValidator } from '../validators/admin.validator.js';
 import { ResponseUtil } from '../utils/response.util.js';
 import { NotFoundError } from '../errors/not-found.error.js';
 import type { UserRoleType } from '../types/roles.js';
@@ -71,19 +72,19 @@ export class AdminController {
 
   public updateUserRole = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const { id } = request.params as { id: string };
-    const body = request.body as { role: UserRoleType };
-    const updated = await this.userRepo.updateRole(id, body.role);
+    const validated = AdminValidator.updateUserRoleSchema.parse(request.body);
+    const updated = await this.userRepo.updateRole(id, validated.role);
     reply.send(ResponseUtil.success(updated, 'User role updated'));
   };
 
   public moveUserCompany = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const { id } = request.params as { id: string };
-    const body = request.body as { companyId: string };
-    const updated = await this.userRepo.update(id, { companyId: body.companyId });
+    const validated = AdminValidator.moveUserCompanySchema.parse(request.body);
+    const updated = await this.userRepo.update(id, { companyId: validated.companyId });
 
-    if (updated.email && body.companyId) {
+    if (updated.email && validated.companyId) {
       try {
-        const targetCompany = await this.companyRepo.findById(body.companyId);
+        const targetCompany = await this.companyRepo.findById(validated.companyId);
         if (targetCompany) {
           const userEmail = updated.email.trim().toLowerCase();
           const currentDomains = Array.isArray(targetCompany.allowedEmailDomains)
@@ -110,9 +111,8 @@ export class AdminController {
   };
 
   public runRetentionCleanup = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const query = request.query as { olderThanDays?: string };
-    const days = query.olderThanDays ? parseInt(query.olderThanDays, 10) : undefined;
-    const result = await this.retentionService.cleanupExpiredVisits(days);
+    const validated = AdminValidator.retentionCleanupSchema.parse(request.query || {});
+    const result = await this.retentionService.cleanupExpiredVisits(validated.olderThanDays);
     reply.send(ResponseUtil.success(result, 'Retention cleanup executed successfully'));
   };
 
@@ -143,14 +143,14 @@ export class AdminController {
 
   public rejectSubmission = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const { id } = request.params as { id: string };
-    const body = request.body as { reason?: string };
+    const validated = AdminValidator.rejectSubmissionSchema.parse(request.body || {});
     const user = request.user;
     const reviewerName = user
       ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
       : 'Admin';
     const updated = await this.submissionService.rejectSubmission(
       id,
-      body?.reason || 'Additional information or photos requested',
+      validated.reason || 'Additional information or photos requested',
       reviewerName
     );
     reply.send(ResponseUtil.success(updated, 'Site submission updated / revision requested'));
@@ -158,25 +158,19 @@ export class AdminController {
 
   public requestMoreSubmission = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const { id } = request.params as { id: string };
-    const body = request.body as {
-      areaId?: string;
-      text?: string;
-      sendNow?: boolean;
-      requestId?: string;
-      remove?: boolean;
-    };
+    const validated = AdminValidator.requestMoreSubmissionSchema.parse(request.body || {});
 
     let updated;
-    if (body?.remove && body?.requestId) {
-      updated = await this.submissionService.removeCustomerRequest(id, body.requestId);
-    } else if (body?.sendNow) {
+    if (validated.remove && validated.requestId) {
+      updated = await this.submissionService.removeCustomerRequest(id, validated.requestId);
+    } else if (validated.sendNow) {
       updated = await this.submissionService.sendCustomerRequests(id);
-    } else if (body?.areaId && body?.text) {
+    } else if (validated.areaId && validated.text) {
       updated = await this.submissionService.queueCustomerRequest(
         id,
-        body.areaId,
-        body.text,
-        body.requestId
+        validated.areaId,
+        validated.text,
+        validated.requestId
       );
     } else {
       updated = await this.submissionService.getSubmissionById(id);
@@ -187,31 +181,27 @@ export class AdminController {
 
   public updateAreaStatus = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const { id } = request.params as { id: string };
-    const body = request.body as {
-      areaId: string;
-      status: 'ok' | 'more_requested' | 'not_reviewed';
-      requestedNote?: string;
-    };
+    const validated = AdminValidator.updateAreaStatusSchema.parse(request.body);
     const updated = await this.submissionService.updateAreaStatus(
       id,
-      body.areaId,
-      body.status,
-      body.requestedNote
+      validated.areaId,
+      validated.status,
+      validated.requestedNote
     );
     reply.send(ResponseUtil.success(updated, 'Area status updated'));
   };
 
   public updateSubmissionNotes = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const { id } = request.params as { id: string };
-    const body = request.body as { notes: string };
-    const updated = await this.submissionService.updateInternalNotes(id, body.notes);
+    const validated = AdminValidator.updateSubmissionNotesSchema.parse(request.body);
+    const updated = await this.submissionService.updateInternalNotes(id, validated.notes);
     reply.send(ResponseUtil.success(updated, 'Notes saved'));
   };
 
   public toggleChecklistItem = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const { id } = request.params as { id: string };
-    const body = request.body as { checkId: string; checked: boolean };
-    const updated = await this.submissionService.toggleChecklistItem(id, body.checkId, body.checked);
+    const validated = AdminValidator.toggleChecklistItemSchema.parse(request.body);
+    const updated = await this.submissionService.toggleChecklistItem(id, validated.checkId, validated.checked);
     reply.send(ResponseUtil.success(updated, 'Checklist updated'));
   };
 }

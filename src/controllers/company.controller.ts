@@ -1,7 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { CompanyService } from '../services/company.service.js';
+import { CompanyService, type CompanyTreeNode } from '../services/company.service.js';
 import { CompanyValidator } from '../validators/company.validator.js';
 import { ResponseUtil } from '../utils/response.util.js';
+import type { ICompany } from '../types/models.js';
 
 export class CompanyController {
   private readonly companyService: CompanyService;
@@ -10,20 +11,42 @@ export class CompanyController {
     this.companyService = companyService ?? new CompanyService();
   }
 
-  public getTree = async (_request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  private sanitizeCompany(company: ICompany, isAdmin: boolean): ICompany {
+    if (isAdmin) {
+      return company;
+    }
+    return {
+      ...company,
+      allowedEmailDomains: (company.allowedEmailDomains || []).filter((d) => !d.includes('@')),
+    };
+  }
+
+  private sanitizeTreeNode(node: CompanyTreeNode, isAdmin: boolean): CompanyTreeNode {
+    return {
+      ...this.sanitizeCompany(node, isAdmin),
+      children: (node.children || []).map((c) => this.sanitizeTreeNode(c, isAdmin)),
+    };
+  }
+
+  public getTree = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const isAdmin = request.user?.role === 'admin';
     const tree = await this.companyService.getCompanyTree();
-    reply.send(ResponseUtil.success(tree));
+    const sanitized = tree.map((node) => this.sanitizeTreeNode(node, isAdmin));
+    reply.send(ResponseUtil.success(sanitized));
   };
 
-  public list = async (_request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  public list = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const isAdmin = request.user?.role === 'admin';
     const companies = await this.companyService.getAllCompanies();
-    reply.send(ResponseUtil.success(companies));
+    const sanitized = companies.map((c) => this.sanitizeCompany(c, isAdmin));
+    reply.send(ResponseUtil.success(sanitized));
   };
 
   public getById = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const isAdmin = request.user?.role === 'admin';
     const { id } = request.params as { id: string };
     const company = await this.companyService.getCompanyById(id);
-    reply.send(ResponseUtil.success(company));
+    reply.send(ResponseUtil.success(this.sanitizeCompany(company, isAdmin)));
   };
 
   public create = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {

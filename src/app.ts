@@ -61,7 +61,8 @@ export class App {
 
         const isAllowed =
           allowedOrigins.includes(origin) ||
-          origin.endsWith('.vercel.app');
+          /^https:\/\/site-visit-companion(-[a-z0-9-]+)?\.vercel\.app$/.test(origin) ||
+          /^https:\/\/sitevisitcompanion-mobile(-[a-z0-9-]+)?\.vercel\.app$/.test(origin);
 
         if (isAllowed) {
           cb(null, true);
@@ -70,6 +71,7 @@ export class App {
         }
       },
       credentials: true,
+      maxAge: 86400,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     });
 

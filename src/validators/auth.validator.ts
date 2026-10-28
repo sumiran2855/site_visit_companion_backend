@@ -2,17 +2,17 @@ import { z } from 'zod';
 
 export class AuthValidator {
   public static readonly loginSchema = z.object({
-    email: z.string().email(),
-    password: z.string().min(6),
+    email: z.string().trim().email(),
+    password: z.string().min(6).max(128),
   });
 
   public static readonly signupRequestSchema = z.object({
-    email: z.string().email(),
-    password: z.string().min(8),
-    firstName: z.string().min(1),
-    lastName: z.string().min(1),
-    middleName: z.string().optional(),
-    requestedCompany: z.string().min(1),
+    email: z.string().trim().email().max(255),
+    password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+    firstName: z.string().trim().min(1, 'First name is required').max(100),
+    lastName: z.string().trim().min(1, 'Last name is required').max(100),
+    middleName: z.string().trim().max(100).optional().nullable(),
+    requestedCompany: z.string().trim().min(1, 'Requested company is required').max(150),
   });
 
   public static readonly approveRequestSchema = z.object({
@@ -28,10 +28,10 @@ export class AuthValidator {
   });
 
   public static readonly updateProfileSchema = z.object({
-    firstName: z.string().min(1).optional(),
-    lastName: z.string().min(1).optional(),
-    middleName: z.string().optional().nullable(),
-    requestedCompany: z.string().min(1).optional(),
+    firstName: z.string().trim().min(1).max(100).optional(),
+    lastName: z.string().trim().min(1).max(100).optional(),
+    middleName: z.string().trim().max(100).optional().nullable(),
+    requestedCompany: z.string().trim().min(1).max(150).optional(),
   });
 }
 

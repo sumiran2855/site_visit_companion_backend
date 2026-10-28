@@ -102,17 +102,11 @@ export class ShareService {
       );
       if (activeToken) {
         visitId = activeToken.visitId;
-      } else {
-        // 3. Fallback: check if identifier matches a visit directly
-        const directVisit = await this.visitRepo.findById(cleanId);
-        if (directVisit) {
-          visitId = directVisit.id;
-        }
       }
     }
 
     if (!visitId) {
-      throw new NotFoundError('Invalid share link');
+      throw new NotFoundError('Invalid or expired share link');
     }
 
     const visit = await this.visitRepo.findById(visitId);

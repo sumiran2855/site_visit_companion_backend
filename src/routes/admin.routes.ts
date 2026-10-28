@@ -14,34 +14,29 @@ export class AdminRoutes {
 
   public register = async (fastify: FastifyInstance): Promise<void> => {
     fastify.addHook('preHandler', this.authMiddleware.handle);
+    fastify.addHook('preHandler', RoleMiddleware.requireAdmin());
 
-    // Company admins and super admins can view members & requests & submissions
-    fastify.register(async (adminScope) => {
-      adminScope.addHook('preHandler', RoleMiddleware.requireCompanyAdmin());
-      adminScope.get('/requests', this.controller.listPendingRequests);
-      adminScope.post('/requests/:id/approve', this.controller.approveRequest);
-      adminScope.post('/requests/:id/reject', this.controller.rejectRequest);
-      adminScope.get('/members', this.controller.listMembers);
+    // User & Member Management
+    fastify.get('/requests', this.controller.listPendingRequests);
+    fastify.post('/requests/:id/approve', this.controller.approveRequest);
+    fastify.post('/requests/:id/reject', this.controller.rejectRequest);
+    fastify.get('/members', this.controller.listMembers);
+    fastify.patch('/members/:id/role', this.controller.updateUserRole);
+    fastify.patch('/members/:id/company', this.controller.moveUserCompany);
+    fastify.delete('/members/:id', this.controller.purgeUser);
 
-      // Submissions management
-      adminScope.get('/submissions', this.controller.listSubmissions);
-      adminScope.get('/submissions/:id', this.controller.getSubmissionById);
-      adminScope.post('/submissions/:id/approve', this.controller.approveSubmission);
-      adminScope.post('/submissions/:id/reject', this.controller.rejectSubmission);
-      adminScope.post('/submissions/:id/request-more', this.controller.requestMoreSubmission);
-      adminScope.patch('/submissions/:id/area-status', this.controller.updateAreaStatus);
-      adminScope.patch('/submissions/:id/notes', this.controller.updateSubmissionNotes);
-      adminScope.patch('/submissions/:id/checklist', this.controller.toggleChecklistItem);
-    });
+    // Retention Cleanup
+    fastify.post('/retention/cleanup', this.controller.runRetentionCleanup);
 
-    // Super admin exclusive routes
-    fastify.register(async (superScope) => {
-      superScope.addHook('preHandler', RoleMiddleware.requireSuperAdmin());
-      superScope.patch('/members/:id/role', this.controller.updateUserRole);
-      superScope.patch('/members/:id/company', this.controller.moveUserCompany);
-      superScope.delete('/members/:id', this.controller.purgeUser);
-      superScope.post('/retention/cleanup', this.controller.runRetentionCleanup);
-    });
+    // Submissions Management
+    fastify.get('/submissions', this.controller.listSubmissions);
+    fastify.get('/submissions/:id', this.controller.getSubmissionById);
+    fastify.post('/submissions/:id/approve', this.controller.approveSubmission);
+    fastify.post('/submissions/:id/reject', this.controller.rejectSubmission);
+    fastify.post('/submissions/:id/request-more', this.controller.requestMoreSubmission);
+    fastify.patch('/submissions/:id/area-status', this.controller.updateAreaStatus);
+    fastify.patch('/submissions/:id/notes', this.controller.updateSubmissionNotes);
+    fastify.patch('/submissions/:id/checklist', this.controller.toggleChecklistItem);
   };
 }
 

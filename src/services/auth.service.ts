@@ -34,7 +34,7 @@ export class AuthService {
     password: string;
     firstName: string;
     lastName: string;
-    middleName?: string | undefined;
+    middleName?: string | null | undefined;
     requestedCompany: string;
   }): Promise<ISignupRequest> {
     const normalizedEmail = data.email.trim().toLowerCase();
@@ -70,16 +70,7 @@ export class AuthService {
       }
     }
 
-    // 3. Check if user already exists in Supabase Auth
-    const { data: userList } = await client.auth.admin.listUsers();
-    const existingAuthUser = userList?.users?.find(
-      (u) => u.email?.toLowerCase() === normalizedEmail
-    );
-    if (existingAuthUser) {
-      throw new ConflictError('An account with this email already exists. Please sign in instead.');
-    }
-
-    // 4. Register user in Supabase Auth as unconfirmed/pending
+    // 3. Register user in Supabase Auth as unconfirmed/pending
     const { data: authUser, error: authError } = await client.auth.admin.createUser({
       email: normalizedEmail,
       password: data.password,
@@ -94,6 +85,7 @@ export class AuthService {
     if (authError || !authUser?.user) {
       if (
         authError?.message?.includes('already been registered') ||
+        authError?.message?.includes('already exists') ||
         (authError as { code?: string })?.code === 'email_exists'
       ) {
         throw new ConflictError('An account with this email already exists. Please sign in instead.');
@@ -235,25 +227,6 @@ export class AuthService {
     const { data, error } = await client.auth.signInWithPassword({ email: normalizedEmail, password });
 
     if (error || !data.session || !data.user) {
-      // Check if user submitted a signup request that is still pending or rejected
-      const pendingRequest = await this.signupRepo.findByEmail(normalizedEmail);
-      if (pendingRequest) {
-        if (pendingRequest.status === 'pending') {
-          throw new UnauthorizedError(
-            'Your account is pending administrator approval. Please wait for an administrator to approve your request.'
-          );
-        }
-        if (pendingRequest.status === 'rejected') {
-          throw new UnauthorizedError('Your signup request was rejected by an administrator.');
-        }
-      }
-
-      // Check if user even exists in profiles
-      const existingProfile = await this.userRepo.findByEmail(normalizedEmail);
-      if (!existingProfile) {
-        throw new UnauthorizedError('No account found with this email. Please sign up to request access.');
-      }
-
       throw new UnauthorizedError('Invalid email or password. Please check your credentials.');
     }
 
@@ -336,8 +309,6 @@ export class AuthService {
     approvalStatus: SignupStatusType | 'not_found';
     requestedCompany?: string | null;
   }> {
-    const client = SupabaseClientProvider.getInstance().getAdminClient();
-
     // 1. Check directly by email if provided
     if (email && email.trim()) {
       const normalizedEmail = email.trim().toLowerCase();
@@ -348,7 +319,7 @@ export class AuthService {
         return {
           email: normalizedEmail,
           approvalStatus: profile.approvalStatus,
-          requestedCompany: signupReq?.requestedCompany || null,
+          requestedCompany: signupReq?.requestedCompany || profile.requestedCompany || null,
         };
       }
 
@@ -360,18 +331,7 @@ export class AuthService {
         };
       }
 
-      // 1b. Also check if user exists in Supabase Auth
-      const { data: userList } = await client.auth.admin.listUsers();
-      const authUser = userList?.users?.find((u) => u.email?.toLowerCase() === normalizedEmail);
-      if (authUser) {
-        return {
-          email: normalizedEmail,
-          approvalStatus: 'approved',
-          requestedCompany: null,
-        };
-      }
-
-      // Email was explicitly provided and not found in profile, requests, or auth
+      // Email was explicitly provided and not found in profile or requests
       return {
         email: normalizedEmail,
         approvalStatus: 'not_found',
@@ -379,25 +339,8 @@ export class AuthService {
       };
     }
 
-    // 2. If email is not provided, query Supabase directly by company name
+    // 2. If email is not provided, sanitize company query to avoid leaking other users' emails
     if (company && company.trim()) {
-      const { data: matchedReq } = await client
-        .from('signup_requests')
-        .select('*')
-        .ilike('requested_company', company.trim())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (matchedReq) {
-        const profile = await this.userRepo.findByEmail(matchedReq.email);
-        return {
-          email: String(matchedReq.email),
-          approvalStatus: profile ? profile.approvalStatus : (matchedReq.status as SignupStatusType),
-          requestedCompany: String(matchedReq.requested_company),
-        };
-      }
-
       return {
         email: '',
         approvalStatus: 'not_found',

@@ -47,6 +47,10 @@ export class RetentionCleanupService {
   public async cleanupExpiredVisits(
     olderThanDays: number = APP_CONSTANTS.RETENTION_PERIOD_DAYS
   ): Promise<{ deletedVisitsCount: number; deletedFilesCount: number }> {
+    if (typeof olderThanDays !== 'number' || isNaN(olderThanDays) || olderThanDays < 30) {
+      throw new Error('Safety guard: Retention cleanup cannot be run for visits newer than 30 days');
+    }
+
     this.logger.info(`Running data retention cleanup for visits older than ${olderThanDays} days`);
 
     const expiredVisits = await this.visitRepo.findExpiredVisits(olderThanDays);
