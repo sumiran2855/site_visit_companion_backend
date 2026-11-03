@@ -8,15 +8,20 @@ import { StorageService } from './storage.service.js';
 import { Logger } from '../utils/logger.js';
 import type { IVisit, IVisitMedia } from '../types/models.js';
 
-export type SubmissionStatus =
-  | 'all'
-  | 'new'
-  | 'in_review'
-  | 'waiting_for_customer'
-  | 'approved'
-  | 'draft';
-
+export type SubmissionStatus = 'all' | 'completed' | 'in_progress' | 'draft';
 export type AreaStatus = 'ok' | 'more_requested' | 'not_reviewed';
+
+export interface CustomerRequest {
+  id: string;
+  areaId: string;
+  areaName: string;
+  text: string;
+  createdAt: string;
+  resolved?: boolean;
+  resolvedAt?: string;
+  technicianResponse?: string;
+  responsePhotos?: any[];
+}
 
 export interface SubmissionMedia {
   id: string;
@@ -35,30 +40,11 @@ export interface SubmissionMedia {
 export interface SubmissionArea {
   id: string;
   name: string;
-  status: AreaStatus;
-  requestedNote?: string | undefined;
   media: SubmissionMedia[];
   specs: Record<string, string>;
   customerNote?: string | undefined;
   rawFields?: Record<string, any> | undefined;
-}
-
-export interface ApprovalChecklistItem {
-  id: string;
-  label: string;
-  checked: boolean;
-}
-
-export interface CustomerRequest {
-  id: string;
-  areaId: string;
-  areaName: string;
-  text: string;
-  createdAt: string;
-  resolved?: boolean;
-  resolvedAt?: string;
-  technicianResponse?: string;
-  responsePhotos?: any[];
+  status: AreaStatus;
 }
 
 export interface SiteSubmission {
@@ -75,18 +61,14 @@ export interface SiteSubmission {
   sentBy: string;
   sentAt: string;
   formattedDate: string;
-  status: 'new' | 'in_review' | 'waiting_for_customer' | 'approved' | 'draft';
-  reviewer: string | null;
+  status: 'completed' | 'in_progress' | 'draft';
   mediaCount: {
     photos: number;
     videos: number;
   };
   areas: SubmissionArea[];
-  approvalChecklist: ApprovalChecklistItem[];
   customerRequests: CustomerRequest[];
   internalNotes: string;
-  rejectionReason?: string | undefined;
-  closedAt?: string | undefined;
   rawSections?: any[] | undefined;
   checklistValues?: Record<string, any> | undefined;
   createdAt: string;
@@ -106,14 +88,6 @@ const SECTION_NAMES: Record<string, string> = {
   'sec-marketing': 'Marketing & Social Media',
   'sec-notes': 'Additional Inspection Notes',
 };
-
-const DEFAULT_CHECKLIST: ApprovalChecklistItem[] = [
-  { id: 'chk-1', label: 'Space for XRGI unit', checked: true },
-  { id: 'chk-2', label: 'Gas supply reachable', checked: true },
-  { id: 'chk-3', label: 'Electrical connection', checked: false },
-  { id: 'chk-4', label: 'Exhaust / flue route', checked: false },
-  { id: 'chk-5', label: 'Access path for delivery', checked: true },
-];
 
 function humanizeFieldId(fieldId: string): string {
   const clean = fieldId
@@ -174,15 +148,33 @@ export class AdminSubmissionService {
     this.logger = new Logger('AdminSubmissionService');
   }
 
-  public async getSubmissions(filters?: {
-    status?: string;
-    search?: string;
-    customer?: string;
-    country?: string;
-  }): Promise<SiteSubmission[]> {
+  public async getSubmissions(
+    filters?: {
+      status?: string;
+      search?: string;
+      customer?: string;
+      country?: string;
+      companyId?: string;
+    },
+    currentUser?: any
+  ): Promise<SiteSubmission[]> {
     try {
-      const [visits, companies, users] = await Promise.all([
-        this.visitRepo.findAll(),
+      let visits: IVisit[];
+
+      // Scope visits: Company Admins view their company's visits, Super Admins view all
+      const isSuper =
+        currentUser?.role === 'super_admin' ||
+        (currentUser?.role === 'admin' && !currentUser?.companyId);
+
+      if (!isSuper && currentUser?.companyId) {
+        visits = await this.visitRepo.findAllByCompanyId(currentUser.companyId);
+      } else if (filters?.companyId) {
+        visits = await this.visitRepo.findAllByCompanyId(filters.companyId);
+      } else {
+        visits = await this.visitRepo.findAll();
+      }
+
+      const [companies, users] = await Promise.all([
         this.companyRepo.findAll(),
         this.userRepo.findAll(),
       ]);
@@ -254,9 +246,17 @@ export class AdminSubmissionService {
     }
   }
 
-  public async getSubmissionById(id: string): Promise<SiteSubmission | null> {
+  public async getSubmissionById(id: string, currentUser?: any): Promise<SiteSubmission | null> {
     const visit = await this.visitRepo.findById(id);
     if (!visit) {
+      return null;
+    }
+
+    const isSuper =
+      currentUser?.role === 'super_admin' ||
+      (currentUser?.role === 'admin' && !currentUser?.companyId);
+
+    if (!isSuper && currentUser?.companyId && visit.companyId !== currentUser.companyId) {
       return null;
     }
 
@@ -281,47 +281,7 @@ export class AdminSubmissionService {
     );
   }
 
-  public async approveSubmission(
-    id: string,
-    reviewerName: string = 'Admin'
-  ): Promise<SiteSubmission | null> {
-    const visit = await this.visitRepo.findById(id);
-    if (!visit) return null;
-
-    await this.visitRepo.updateStatus(id, 'completed');
-
-    const record = await this.recordRepo.findByVisitId(id);
-    const service = (record?.service as any) || {
-      service_id: 'service-site-visit',
-      service_name: 'Site Visit',
-      sections: [],
-    };
-
-    const review = service.review || {};
-    review.status = 'approved';
-    review.reviewer = reviewerName;
-    review.closedAt = new Date().toISOString();
-    review.updatedAt = new Date().toISOString();
-
-    // Mark all areas as OK
-    const areaStatuses: Record<string, { status: AreaStatus }> = {};
-    if (Array.isArray(service.sections)) {
-      service.sections.forEach((s: any) => {
-        areaStatuses[s.section_id || s.id] = { status: 'ok' };
-      });
-    }
-    review.areaStatuses = areaStatuses;
-    service.review = review;
-
-    await this.recordRepo.upsertRecord(id, service);
-    return this.getSubmissionById(id);
-  }
-
-  public async rejectSubmission(
-    id: string,
-    reason: string,
-    reviewerName: string = 'Admin'
-  ): Promise<SiteSubmission | null> {
+  public async updateInternalNotes(id: string, notes: string): Promise<SiteSubmission | null> {
     const visit = await this.visitRepo.findById(id);
     if (!visit) return null;
 
@@ -333,9 +293,7 @@ export class AdminSubmissionService {
     };
 
     const review = service.review || {};
-    review.status = 'waiting_for_customer';
-    review.rejectionReason = reason;
-    review.reviewer = reviewerName;
+    review.internalNotes = notes;
     review.updatedAt = new Date().toISOString();
     service.review = review;
 
@@ -369,7 +327,6 @@ export class AdminSubmissionService {
       ? SECTION_NAMES[areaId] || section.section_name || humanizeFieldId(areaId)
       : 'Area';
 
-    // If an existing requestId is provided, update that request; otherwise append to queue
     const existingIndex = requestId
       ? requests.findIndex((r) => r.id === requestId)
       : -1;
@@ -449,7 +406,6 @@ export class AdminSubmissionService {
     };
 
     const review = service.review || {};
-    review.status = 'waiting_for_customer';
     review.updatedAt = new Date().toISOString();
     service.review = review;
 
@@ -483,61 +439,6 @@ export class AdminSubmissionService {
       );
     }
 
-    review.updatedAt = new Date().toISOString();
-    service.review = review;
-
-    await this.recordRepo.upsertRecord(id, service);
-    return this.getSubmissionById(id);
-  }
-
-  public async updateInternalNotes(id: string, notes: string): Promise<SiteSubmission | null> {
-    const visit = await this.visitRepo.findById(id);
-    if (!visit) return null;
-
-    const record = await this.recordRepo.findByVisitId(id);
-    const service = (record?.service as any) || {
-      service_id: 'service-site-visit',
-      service_name: 'Site Visit',
-      sections: [],
-    };
-
-    const review = service.review || {};
-    review.internalNotes = notes;
-    review.updatedAt = new Date().toISOString();
-    service.review = review;
-
-    await this.recordRepo.upsertRecord(id, service);
-    return this.getSubmissionById(id);
-  }
-
-  public async toggleChecklistItem(
-    id: string,
-    checkId: string,
-    checked: boolean
-  ): Promise<SiteSubmission | null> {
-    const visit = await this.visitRepo.findById(id);
-    if (!visit) return null;
-
-    const record = await this.recordRepo.findByVisitId(id);
-    const service = (record?.service as any) || {
-      service_id: 'service-site-visit',
-      service_name: 'Site Visit',
-      sections: [],
-    };
-
-    const review = service.review || {};
-    const checklist: ApprovalChecklistItem[] = Array.isArray(review.approvalChecklist)
-      ? review.approvalChecklist
-      : DEFAULT_CHECKLIST.map((c) => ({ ...c }));
-
-    const item = checklist.find((c) => c.id === checkId);
-    if (item) {
-      item.checked = checked;
-    } else {
-      checklist.push({ id: checkId, label: humanizeFieldId(checkId), checked });
-    }
-
-    review.approvalChecklist = checklist;
     review.updatedAt = new Date().toISOString();
     service.review = review;
 
@@ -584,13 +485,12 @@ export class AdminSubmissionService {
     const photosCount = mediaList.filter((m) => m.type === 'photo').length;
     const videosCount = mediaList.filter((m) => m.type === 'video').length;
 
-    let status: 'new' | 'in_review' | 'waiting_for_customer' | 'approved' | 'draft' = 'draft';
-    if (review.status) {
-      status = review.status;
-    } else if (visit.status === 'completed') {
-      status = 'approved';
-    } else if (visit.status === 'in_progress' || photosCount > 0 || videosCount > 0) {
-      status = 'in_review';
+    // Direct status from visit inspection progress: completed when submitted/finished, no approval gate
+    let status: 'completed' | 'in_progress' | 'draft' = 'draft';
+    if (visit.status === 'completed' || visit.completionPercentage >= 100) {
+      status = 'completed';
+    } else if (visit.status === 'in_progress' || visit.completedFields > 0 || photosCount > 0 || videosCount > 0) {
+      status = 'in_progress';
     }
 
     const formattedDate = visit.createdAt
@@ -600,7 +500,7 @@ export class AdminSubmissionService {
         })
       : 'Recent';
 
-    // Collect all checklist values across ALL sections (including sec-meeting and sec-notes)
+    // Collect all checklist values across ALL sections
     const checklistValues: Record<string, any> = {};
     for (const sec of sections) {
       if (sec.fields && typeof sec.fields === 'object') {
@@ -666,18 +566,17 @@ export class AdminSubmissionService {
         }
       }
 
-      const savedAreaReview = review.areaStatuses?.[secId];
-      const areaStatus: AreaStatus =
-        savedAreaReview?.status || (secMedia.length > 0 ? 'ok' : 'not_reviewed');
+      const areaStatus: AreaStatus = review.areaStatuses?.[secId]?.status || 'not_reviewed';
+      const customerNote: string | undefined = review.areaStatuses?.[secId]?.requestedNote || undefined;
 
       areas.push({
         id: secId,
         name: SECTION_NAMES[secId] || sec.section_name || sec.title || humanizeFieldId(secId),
-        status: areaStatus,
-        requestedNote: savedAreaReview?.requestedNote,
         media: secMedia,
         specs,
         rawFields,
+        status: areaStatus,
+        customerNote,
       });
     }
 
@@ -714,19 +613,35 @@ export class AdminSubmissionService {
       areas.push({
         id: 'sec-additional-media',
         name: 'Additional Media & Attachments',
-        status: 'ok',
         media: extraMedia,
         specs: {},
+        status: 'not_reviewed',
       });
     }
 
-    const approvalChecklist: ApprovalChecklistItem[] = Array.isArray(review.approvalChecklist)
-      ? review.approvalChecklist
-      : DEFAULT_CHECKLIST.map((c) => ({ ...c }));
-
-    const customerRequests: CustomerRequest[] = Array.isArray(review.customerRequests)
+    const rawRequests: CustomerRequest[] = Array.isArray(review.customerRequests)
       ? review.customerRequests
       : [];
+
+    const customerRequests: CustomerRequest[] = await Promise.all(
+      rawRequests.map(async (req) => {
+        if (!req.responsePhotos || req.responsePhotos.length === 0) return req;
+        const mappedPhotos = await Promise.all(
+          req.responsePhotos.map(async (p: any) => {
+            if (p.storageKey) {
+              try {
+                const signed = await this.storageService.getPresignedDownloadUrl(p.storageKey, 86400);
+                return { ...p, url: signed || p.url || p.remoteUrl };
+              } catch {
+                return { ...p, url: p.url || p.remoteUrl };
+              }
+            }
+            return { ...p, url: p.url || p.remoteUrl };
+          })
+        );
+        return { ...req, responsePhotos: mappedPhotos };
+      })
+    );
 
     return {
       id: visit.id,
@@ -743,17 +658,13 @@ export class AdminSubmissionService {
       sentAt: visit.createdAt ? new Date(visit.createdAt).toISOString() : new Date().toISOString(),
       formattedDate,
       status,
-      reviewer: review.reviewer || null,
       mediaCount: {
         photos: photosCount,
         videos: videosCount,
       },
       areas,
-      approvalChecklist,
       customerRequests,
       internalNotes: review.internalNotes || '',
-      rejectionReason: review.rejectionReason,
-      closedAt: review.closedAt,
       rawSections: sections,
       checklistValues,
       createdAt: visit.createdAt ? new Date(visit.createdAt).toISOString() : new Date().toISOString(),

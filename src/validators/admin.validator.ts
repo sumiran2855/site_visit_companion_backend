@@ -22,8 +22,8 @@ export class AdminValidator {
     companyId: z.string().trim().min(1, 'Company ID is required'),
   });
 
-  public static readonly rejectSubmissionSchema = z.object({
-    reason: z.string().trim().max(1000).optional(),
+  public static readonly updateSubmissionNotesSchema = z.object({
+    notes: z.string().max(10000, 'Notes cannot exceed 10,000 characters'),
   });
 
   public static readonly requestMoreSubmissionSchema = z.object({
@@ -39,14 +39,6 @@ export class AdminValidator {
     status: z.enum(['ok', 'more_requested', 'not_reviewed']),
     requestedNote: z.string().trim().max(2000).optional(),
   });
-
-  public static readonly updateSubmissionNotesSchema = z.object({
-    notes: z.string().max(10000, 'Notes cannot exceed 10,000 characters'),
-  });
-
-  public static readonly toggleChecklistItemSchema = z.object({
-    checkId: z.string().trim().min(1, 'Check ID is required').max(100),
-    checked: z.boolean(),
-  });
 }
+
 

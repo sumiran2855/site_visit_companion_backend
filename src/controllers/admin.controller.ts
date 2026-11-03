@@ -118,42 +118,24 @@ export class AdminController {
 
   public listSubmissions = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const query = request.query as any;
-    const submissions = await this.submissionService.getSubmissions(query);
+    const submissions = await this.submissionService.getSubmissions(query, request.user);
     reply.send(ResponseUtil.success(submissions));
   };
 
   public getSubmissionById = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const { id } = request.params as { id: string };
-    const submission = await this.submissionService.getSubmissionById(id);
+    const submission = await this.submissionService.getSubmissionById(id, request.user);
     if (!submission) {
       throw new NotFoundError('Site submission not found');
     }
     reply.send(ResponseUtil.success(submission));
   };
 
-  public approveSubmission = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  public updateSubmissionNotes = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const { id } = request.params as { id: string };
-    const user = request.user;
-    const reviewerName = user
-      ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
-      : 'Admin';
-    const updated = await this.submissionService.approveSubmission(id, reviewerName);
-    reply.send(ResponseUtil.success(updated, 'Site submission approved'));
-  };
-
-  public rejectSubmission = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const { id } = request.params as { id: string };
-    const validated = AdminValidator.rejectSubmissionSchema.parse(request.body || {});
-    const user = request.user;
-    const reviewerName = user
-      ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
-      : 'Admin';
-    const updated = await this.submissionService.rejectSubmission(
-      id,
-      validated.reason || 'Additional information or photos requested',
-      reviewerName
-    );
-    reply.send(ResponseUtil.success(updated, 'Site submission updated / revision requested'));
+    const validated = AdminValidator.updateSubmissionNotesSchema.parse(request.body);
+    const updated = await this.submissionService.updateInternalNotes(id, validated.notes);
+    reply.send(ResponseUtil.success(updated, 'Notes saved'));
   };
 
   public requestMoreSubmission = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -173,10 +155,10 @@ export class AdminController {
         validated.requestId
       );
     } else {
-      updated = await this.submissionService.getSubmissionById(id);
+      updated = await this.submissionService.getSubmissionById(id, request.user);
     }
 
-    reply.send(ResponseUtil.success(updated, 'Customer request updated'));
+    reply.send(ResponseUtil.success(updated, 'Admin request updated'));
   };
 
   public updateAreaStatus = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -189,20 +171,6 @@ export class AdminController {
       validated.requestedNote
     );
     reply.send(ResponseUtil.success(updated, 'Area status updated'));
-  };
-
-  public updateSubmissionNotes = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const { id } = request.params as { id: string };
-    const validated = AdminValidator.updateSubmissionNotesSchema.parse(request.body);
-    const updated = await this.submissionService.updateInternalNotes(id, validated.notes);
-    reply.send(ResponseUtil.success(updated, 'Notes saved'));
-  };
-
-  public toggleChecklistItem = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const { id } = request.params as { id: string };
-    const validated = AdminValidator.toggleChecklistItemSchema.parse(request.body);
-    const updated = await this.submissionService.toggleChecklistItem(id, validated.checkId, validated.checked);
-    reply.send(ResponseUtil.success(updated, 'Checklist updated'));
   };
 }
 

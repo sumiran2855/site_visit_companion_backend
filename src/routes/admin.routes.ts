@@ -28,15 +28,12 @@ export class AdminRoutes {
     // Retention Cleanup
     fastify.post('/retention/cleanup', this.controller.runRetentionCleanup);
 
-    // Submissions Management
+    // Submissions Management (Direct inspection oversight with admin request collaboration)
     fastify.get('/submissions', this.controller.listSubmissions);
     fastify.get('/submissions/:id', this.controller.getSubmissionById);
-    fastify.post('/submissions/:id/approve', this.controller.approveSubmission);
-    fastify.post('/submissions/:id/reject', this.controller.rejectSubmission);
     fastify.post('/submissions/:id/request-more', this.controller.requestMoreSubmission);
     fastify.patch('/submissions/:id/area-status', this.controller.updateAreaStatus);
     fastify.patch('/submissions/:id/notes', this.controller.updateSubmissionNotes);
-    fastify.patch('/submissions/:id/checklist', this.controller.toggleChecklistItem);
   };
 }
 
