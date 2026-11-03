@@ -43,6 +43,7 @@ export interface SubmissionArea {
   media: SubmissionMedia[];
   specs: Record<string, string>;
   customerNote?: string | undefined;
+  requestedNote?: string | undefined;
   rawFields?: Record<string, any> | undefined;
   status: AreaStatus;
 }
@@ -577,6 +578,7 @@ export class AdminSubmissionService {
         rawFields,
         status: areaStatus,
         customerNote,
+        requestedNote: customerNote,
       });
     }
 
