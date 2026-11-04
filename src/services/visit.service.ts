@@ -175,14 +175,39 @@ export class VisitService {
           (service as any).review = existingReview;
         } else {
           // Merge to ensure no existing review fields (e.g. customerRequests or approvalChecklist) are wiped out
-          (service as any).review = {
+          const mergedAreaStatuses = {
+            ...(existingReview.areaStatuses || {}),
+            ...((service as any).review.areaStatuses || {}),
+          };
+
+          const mergedReview = {
             ...existingReview,
             ...(service as any).review,
-            areaStatuses: {
-              ...(existingReview.areaStatuses || {}),
-              ...((service as any).review.areaStatuses || {}),
-            },
+            areaStatuses: mergedAreaStatuses,
           };
+
+          // Reconcile area statuses against customer requests: if all requests for an area are resolved, set status to 'ok'
+          const netRequests = Array.isArray(mergedReview.customerRequests)
+            ? mergedReview.customerRequests
+            : [];
+          Object.keys(mergedAreaStatuses).forEach((key) => {
+            const hasUnresolved = netRequests.some(
+              (r: any) =>
+                (r.areaId === key ||
+                  `sec-${r.areaId}` === key ||
+                  r.areaId.replace(/^sec-/, '') === key.replace(/^sec-/, '')) &&
+                !r.resolved
+            );
+            if (!hasUnresolved && mergedAreaStatuses[key]?.status === 'more_requested') {
+              mergedAreaStatuses[key] = {
+                ...mergedAreaStatuses[key],
+                status: 'ok',
+              };
+              delete mergedAreaStatuses[key].requestedNote;
+            }
+          });
+
+          (service as any).review = mergedReview;
         }
       }
     } catch {
@@ -338,32 +363,57 @@ export class VisitService {
   }
 
   public async listVisits(currentUser: IProfile, filterCompanyId?: string): Promise<IVisit[]> {
+    let visits: IVisit[] = [];
+
     if (currentUser.role === 'admin' || currentUser.role === 'super_admin') {
       if (filterCompanyId) {
-        return this.visitRepo.findAllByCompanyId(filterCompanyId);
+        visits = await this.visitRepo.findAllByCompanyId(filterCompanyId);
+      } else {
+        visits = await this.visitRepo.findAll();
       }
-      return this.visitRepo.findAll();
-    }
-
-    // 1. User has direct companyId
-    if (currentUser.companyId) {
-      return this.visitRepo.findAllByCompanyId(currentUser.companyId);
-    }
-
-    // 2. User has requestedCompany name
-    if (currentUser.requestedCompany) {
+    } else if (currentUser.companyId) {
+      // 1. User has direct companyId
+      visits = await this.visitRepo.findAllByCompanyId(currentUser.companyId);
+    } else if (currentUser.requestedCompany) {
+      // 2. User has requestedCompany name
       const company = await this.companyRepo.findByName(currentUser.requestedCompany);
       if (company) {
         const companyVisits = await this.visitRepo.findAllByCompanyId(company.id);
         if (companyVisits && companyVisits.length > 0) {
-          return companyVisits;
+          visits = companyVisits;
         }
       }
+      if (visits.length === 0) {
+        visits = (await this.visitRepo.findAllByOwnerId(currentUser.id)) || [];
+      }
+    } else {
+      // 3. Fallback: Find visits owned by current user
+      visits = (await this.visitRepo.findAllByOwnerId(currentUser.id)) || [];
     }
 
-    // 3. Fallback: Find visits owned by current user
-    const ownerVisits = await this.visitRepo.findAllByOwnerId(currentUser.id);
-    return ownerVisits || [];
+    return this.enrichVisitsWithReviewData(visits);
+  }
+
+  private async enrichVisitsWithReviewData(visits: IVisit[]): Promise<IVisit[]> {
+    if (!visits || visits.length === 0) return [];
+    await Promise.all(
+      visits.map(async (v) => {
+        try {
+          const rec = await this.visitRecordRepo.findByVisitId(v.id);
+          const review = (rec?.service as any)?.review;
+          if (review) {
+            const requests = Array.isArray(review.customerRequests) ? review.customerRequests : [];
+            const unresolved = requests.filter((r: any) => !r.resolved);
+            (v as any).hasPendingRequests = unresolved.length > 0;
+            (v as any).pendingRequestsCount = unresolved.length;
+            (v as any).reviewStatus = review.status;
+          }
+        } catch {
+          // Continue if record enrichment fails
+        }
+      })
+    );
+    return visits;
   }
 
   public async createVisit(

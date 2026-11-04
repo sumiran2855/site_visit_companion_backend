@@ -567,8 +567,24 @@ export class AdminSubmissionService {
         }
       }
 
-      const areaStatus: AreaStatus = review.areaStatuses?.[secId]?.status || 'not_reviewed';
-      const customerNote: string | undefined = review.areaStatuses?.[secId]?.requestedNote || undefined;
+      const hasUnresolvedReq = (review.customerRequests || []).some(
+        (r: any) =>
+          (r.areaId === secId ||
+            `sec-${r.areaId}` === secId ||
+            r.areaId.replace(/^sec-/, '') === secId.replace(/^sec-/, '')) &&
+          !r.resolved
+      );
+
+      let areaStatus: AreaStatus = review.areaStatuses?.[secId]?.status || 'not_reviewed';
+      if (hasUnresolvedReq) {
+        areaStatus = 'more_requested';
+      } else if (areaStatus === 'more_requested') {
+        areaStatus = 'ok';
+      }
+
+      const customerNote: string | undefined = hasUnresolvedReq
+        ? review.areaStatuses?.[secId]?.requestedNote || undefined
+        : undefined;
 
       areas.push({
         id: secId,
@@ -633,15 +649,15 @@ export class AdminSubmissionService {
             if (p.storageKey) {
               try {
                 const signed = await this.storageService.getPresignedDownloadUrl(p.storageKey, 86400);
-                return { ...p, url: signed || p.url || p.remoteUrl };
+                return { ...p, url: signed || p.url || p.remoteUrl || p.uri || '' };
               } catch {
-                return { ...p, url: p.url || p.remoteUrl };
+                return { ...p, url: p.url || p.remoteUrl || p.uri || '' };
               }
             }
-            return { ...p, url: p.url || p.remoteUrl };
+            return { ...p, url: p.url || p.remoteUrl || p.uri || '' };
           })
         );
-        return { ...req, responsePhotos: mappedPhotos };
+        return { ...req, resolved: Boolean(req.resolved), responsePhotos: mappedPhotos };
       })
     );
 
