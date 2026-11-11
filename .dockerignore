@@ -1,0 +1,31 @@
+# Node modules
+node_modules
+
+# Environment variables
+.env
+.env.*
+.env.local
+
+# Logs
+*.log
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+dockerfile
+.dockerignore
+
+# OS and IDE files
+.DS_Store
+.vscode
+.idea
+
+# Test and coverage
+coverage
+__tests__
+
+# Build
+dist/

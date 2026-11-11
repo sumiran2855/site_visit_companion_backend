@@ -12,10 +12,18 @@ import { ResponseUtil } from '../utils/response.util.js';
 
 export class AppRouter {
   public static async registerRoutes(fastify: FastifyInstance): Promise<void> {
-    // Health check endpoint
-    fastify.get('/health', async (_req, reply) => {
-      reply.send(ResponseUtil.success({ status: 'ok', timestamp: new Date().toISOString() }));
-    });
+    // Health check endpoints (available at both /health and /api/health for AWS ALB / ECS)
+    const healthHandler = async (_req: any, reply: any) => {
+      return reply.status(200).send({
+        success: true,
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+      });
+    };
+
+    fastify.get('/health', healthHandler);
+    fastify.get('/api/health', healthHandler);
 
     // API Routes
     await fastify.register(new AuthRoutes().register, { prefix: '/api/auth' });

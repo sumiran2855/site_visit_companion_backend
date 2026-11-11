@@ -1,0 +1,33 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "EC-Power-SiteVisit-Backend-Prod-Cont",
+      "image": "<IMAGE1_NAME>",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 4000,
+          "hostPort": 4000,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/site-visit-backend-task",
+          "awslogs-region": "eu-west-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ],
+  "family": "site-visit-backend-task",
+  "taskRoleArn": "arn:aws:iam::108782080376:role/ecsTaskExecutionRole",
+  "executionRoleArn": "arn:aws:iam::108782080376:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024"
+}

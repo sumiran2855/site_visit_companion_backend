@@ -1,0 +1,9 @@
+version: 1
+Resources:
+  - TargetService:
+      Type: AWS::ECS::Service
+      Properties:
+        TaskDefinition: "taskdef.json"
+        LoadBalancerInfo:
+          ContainerName: "EC-Power-SiteVisit-Backend-Prod-Cont"
+          ContainerPort: 4000
